@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"mictract/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,25 +9,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-func SaveCertAndPrivkey(cacert, cert, privkey []byte, username, networkName, orgName, mspType string, isTLS bool) error {
+func SaveCertAndPrivkey(cacert, cert, privkey []byte, isTLS bool, causer model.CaUser) error {
 	// 此段代码生成的prefixPath目录下应该只需包括msp和tls两个文件夹
-	prefixPath := filepath.Join(GetNetworksMountDirectory(), networkName)
-	domainName := networkName + ".com"
-	if strings.Contains(orgName, "orderer") {
+	prefixPath := filepath.Join(GetNetworksMountDirectory(), causer.NetName)
+	domainName := causer.NetName + ".com"
+	if strings.Contains(causer.OrgName, "orderer") {
 
 		prefixPath = filepath.Join(prefixPath, "ordererOrganizations", domainName)
-		if mspType == "orderer" {
-			prefixPath = filepath.Join(prefixPath, "orderers", username+"."+domainName)
+		if causer.MspType == "orderer" {
+			prefixPath = filepath.Join(prefixPath, "orderers", causer.Username)
 		} else {
-			prefixPath = filepath.Join(prefixPath, "users", username+"@"+domainName)
+			prefixPath = filepath.Join(prefixPath, "users", causer.Username)
 		}
 	} else {
-		domainName = orgName + "." + domainName
+		domainName = causer.OrgName + "." + domainName
 		prefixPath = filepath.Join(prefixPath, "peerOrganizations", domainName)
-		if mspType == "peer" {
-			prefixPath = filepath.Join(prefixPath, "peers", username+"."+domainName)
+		if causer.MspType == "peer" {
+			prefixPath = filepath.Join(prefixPath, "peers", causer.Username)
 		} else {
-			prefixPath = filepath.Join(prefixPath, "users", username+"@"+domainName)
+			prefixPath = filepath.Join(prefixPath, "users", causer.Username)
 		}
 	}
 
@@ -38,7 +39,7 @@ func SaveCertAndPrivkey(cacert, cert, privkey []byte, username, networkName, org
 		}
 
 		fuckName := ""
-		if mspType == "peer" || mspType == "orderer" {
+		if causer.MspType == "peer" || causer.MspType == "orderer" {
 			fuckName = "server"
 		} else {
 			fuckName = "client"
@@ -100,7 +101,7 @@ func SaveCertAndPrivkey(cacert, cert, privkey []byte, username, networkName, org
 		}
 		f2.Write(cacert)
 
-		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", username+"."+certNameSuffix))
+		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", causer.Username+"-cert.com"))
 		defer f3.Close()
 		if err != nil {
 			return err
