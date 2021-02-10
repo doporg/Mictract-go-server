@@ -5,20 +5,19 @@ import (
 	"github.com/pkg/errors"
 
 	"mictract/model"
-	"mictract/utils"
 )
 
-func Register(mspClient *msp.Client, causer model.CaUser) error {
+func Register(mspClient *msp.Client, caUser model.CaUser) error {
 
 	request := &msp.RegistrationRequest{
-		Name:   causer.Username,
-		Type:   causer.MspType,
-		Secret: causer.Password,
+		Name:   caUser.GetUsername(),
+		Type:   caUser.Type,
+		Secret: caUser.Password,
 	}
 
 	_, err := mspClient.Register(request)
 	if err != nil {
-		return errors.WithMessage(err, "fail to register "+causer.Username)
+		return errors.WithMessage(err, "fail to register "+caUser.GetUsername())
 	}
 	return nil
 }
@@ -28,16 +27,18 @@ func Register(mspClient *msp.Client, causer model.CaUser) error {
 // isTLS 是否是用于TLS的证书？
 func Enroll(mspClient *msp.Client, isTLS bool, causer model.CaUser) error {
 	var err error
+	username := causer.GetUsername()
+
 	if isTLS {
-		err = mspClient.Enroll(causer.Username, msp.WithSecret(causer.Password), msp.WithProfile("tls"))
+		err = mspClient.Enroll(username, msp.WithSecret(causer.Password), msp.WithProfile("tls"))
 	} else {
-		err = mspClient.Enroll(causer.Username, msp.WithSecret(causer.Password))
+		err = mspClient.Enroll(username, msp.WithSecret(causer.Password))
 	}
 	if err != nil {
-		return errors.WithMessage(err, "fail to enroll "+causer.Username)
+		return errors.WithMessage(err, "fail to enroll "+username)
 	}
 
-	resp, err := mspClient.GetSigningIdentity(causer.Username)
+	resp, err := mspClient.GetSigningIdentity(username)
 	if err != nil {
 		return errors.WithMessage(err, "fail to get identity")
 	}
@@ -53,7 +54,7 @@ func Enroll(mspClient *msp.Client, isTLS bool, causer model.CaUser) error {
 		return errors.WithMessage(err, "fail to get cacert")
 	}
 
-	err = utils.SaveCertAndPrivkey(cainfo.CAChain, cert, privkey, isTLS, causer)
+	err = causer.BuildDir(cainfo.CAChain, cert, privkey)
 	if err != nil {
 		return errors.WithMessage(err, "fail to store info")
 	}
