@@ -13,11 +13,11 @@ func TestCURD(t *testing.T) {
 	createTables()
 
 	for _, pair := range [][]string{
-		[]string{"zhangsan", "Admin@org2.net1.com"},
-		[]string{"zhangsan", "User1@net1.com"},
-		[]string{"zhangsan", "User100@org2.net1.com"},
-		[]string{"lisi", "Admin@org1.net2.com"},
-		[]string{"wangwu", "User@org1000.net1422.com"},
+		{"zhangsan", "Admin@org2.net1.com"},
+		{"zhangsan", "User1@net1.com"},
+		{"zhangsan", "User100@org2.net1.com"},
+		{"lisi", "Admin@org1.net2.com"},
+		{"wangwu", "User@org1000.net1422.com"},
 	} {
 		if err := model.AddUser(pair[0], pair[1]); err != nil {
 			global.Logger.Fatal("fail to add", zap.Error(err))
