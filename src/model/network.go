@@ -1,22 +1,26 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"mictract/global"
 	"mictract/model/request"
+	"reflect"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 )
 
 type Network struct {
-	ID            int            `json:"id"`
-	Name          string         `json:"name" binding:"required"`
-	Orders        []Order        `json:"orders" binding:"required"`
-	Organizations []Organization `json:"organizations" binding:"required"`
-	Consensus     string         `json:"consensus" binding:"required"`
-	TlsEnabled    bool           `json:"tlsEnabled"`
+	gorm.Model
+	ID            int           `json:"id"`
+	Name          string        `json:"name" binding:"required"`
+	Orders        Orders        `json:"orders" binding:"required"`
+	Organizations Organizations `json:"organizations" binding:"required"`
+	Consensus     string        `json:"consensus" binding:"required"`
+	TlsEnabled    bool          `json:"tlsEnabled"`
 }
 
 var (
@@ -100,6 +104,29 @@ func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
 	return global.SDKs[n.Name], nil
 }
 
-func (n *Network) GenerateSDKConfig() ([]byte, error) {
-	return nil, nil
+// 给network中的自定义字段使用
+// scan for scanner helper
+func scan(data interface{}, value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	switch value.(type) {
+	case []byte:
+		return json.Unmarshal(value.([]byte), data)
+	case string:
+		return json.Unmarshal([]byte(value.(string)), data)
+	default:
+		return fmt.Errorf("val type is valid, is %+v", value)
+	}
+}
+
+// for valuer helper
+func value(data interface{}) (interface{}, error) {
+	vi := reflect.ValueOf(data)
+	// 判断是否为 0 值
+	if vi.IsZero() {
+		return nil, nil
+	}
+	return json.Marshal(data)
 }
