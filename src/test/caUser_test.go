@@ -1,23 +1,24 @@
 package test
 
 import (
-	"github.com/stretchr/testify/assert"
 	"mictract/config"
 	"mictract/model"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestSave(t *testing.T) {
+func TestSaveCaUser(t *testing.T) {
 	// 一orderer，一组织网络
 	tests := []struct {
 		Username string
 	}{
-		{ Username: "Admin1@net1.com" },
-		{ Username: "Admin1@org1.net1.com" },
-		{ Username: "User1@net1.com" },
-		{ Username: "User1@org1.net1.com" },
-		{ Username: "orderer1.net1.com" },
-		{ Username: "peer1.org1.net1.com" },
+		{Username: "Admin1@net1.com"},
+		{Username: "Admin1@org1.net1.com"},
+		{Username: "User1@net1.com"},
+		{Username: "User1@org1.net1.com"},
+		{Username: "orderer1.net1.com"},
+		{Username: "peer1.org1.net1.com"},
 	}
 
 	for _, tc := range tests {
@@ -27,33 +28,33 @@ func TestSave(t *testing.T) {
 }
 
 func TestGetUsername(t *testing.T) {
-	tests := []struct{
-		Username 	string
-		CaUser		model.CaUser
+	tests := []struct {
+		Username string
+		CaUser   *model.CaUser
 	}{
 		{
 			Username: "Admin1@net1.com",
-			CaUser: model.NewAdminCaUser(1, -1, 1, ""),
+			CaUser:   model.NewAdminCaUser(1, -1, 1, ""),
 		},
 		{
 			Username: "Admin1@org1.net1.com",
-			CaUser: model.NewAdminCaUser(1, 1, 1, ""),
+			CaUser:   model.NewAdminCaUser(1, 1, 1, ""),
 		},
 		{
 			Username: "User1@net1.com",
-			CaUser: model.NewUserCaUser(1, -1, 1, ""),
+			CaUser:   model.NewUserCaUser(1, -1, 1, ""),
 		},
 		{
 			Username: "User1@org1.net1.com",
-			CaUser: model.NewUserCaUser(1, 1, 1, ""),
+			CaUser:   model.NewUserCaUser(1, 1, 1, ""),
 		},
 		{
 			Username: "orderer1.net1.com",
-			CaUser: model.NewOrdererCaUser(1, 1, ""),
+			CaUser:   model.NewOrdererCaUser(1, 1, ""),
 		},
 		{
 			Username: "peer1.org1.net1.com",
-			CaUser: model.NewPeerCaUser(1, 1, 1, ""),
+			CaUser:   model.NewPeerCaUser(1, 1, 1, ""),
 		},
 	}
 
@@ -64,33 +65,33 @@ func TestGetUsername(t *testing.T) {
 }
 
 func TestNewCaUserFromUsername(t *testing.T) {
-	tests := []struct{
-		Username 	string
-		CaUser		model.CaUser
+	tests := []struct {
+		Username string
+		CaUser   *model.CaUser
 	}{
 		{
 			Username: "Admin1@net1.com",
-			CaUser: model.NewAdminCaUser(1, -1, 1, ""),
+			CaUser:   model.NewAdminCaUser(1, -1, 1, ""),
 		},
 		{
 			Username: "Admin1@org1.net1.com",
-			CaUser: model.NewAdminCaUser(1, 1, 1, ""),
+			CaUser:   model.NewAdminCaUser(1, 1, 1, ""),
 		},
 		{
 			Username: "User1@net1.com",
-			CaUser: model.NewUserCaUser(1, -1, 1, ""),
+			CaUser:   model.NewUserCaUser(1, -1, 1, ""),
 		},
 		{
 			Username: "User1@org1.net1.com",
-			CaUser: model.NewUserCaUser(1, 1, 1, ""),
+			CaUser:   model.NewUserCaUser(1, 1, 1, ""),
 		},
 		{
 			Username: "orderer1.net1.com",
-			CaUser: model.NewOrdererCaUser(1, 1, ""),
+			CaUser:   model.NewOrdererCaUser(1, 1, ""),
 		},
 		{
 			Username: "peer1.org1.net1.com",
-			CaUser: model.NewPeerCaUser(1, 1, 1, ""),
+			CaUser:   model.NewPeerCaUser(1, 1, 1, ""),
 		},
 	}
 
@@ -101,9 +102,9 @@ func TestNewCaUserFromUsername(t *testing.T) {
 }
 
 func TestGetBasePath(t *testing.T) {
-	tests := []struct{
-		BasePath 	string
-		CaUser		model.CaUser
+	tests := []struct {
+		BasePath string
+		CaUser   *model.CaUser
 	}{
 		{
 			BasePath: config.LOCAL_BASE_PATH +

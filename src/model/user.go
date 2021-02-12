@@ -46,9 +46,17 @@ func DelUser(username string) error {
 	return nil
 }
 
-func QueryUser(nickname string) ([]User, error) {
+func QueryUserByNickName(nickname string) ([]User, error) {
 	users := []User{}
 	if err := global.DB.Where("nickname = ?", nickname).Find(&users).Error; err != nil {
+		return nil, errors.WithMessage(err, "Fail to query")
+	}
+	return users, nil
+}
+
+func QueryUserByUserName(username string) ([]User, error) {
+	users := []User{}
+	if err := global.DB.Where("username = ?", username).Find(&users).Error; err != nil {
 		return nil, errors.WithMessage(err, "Fail to query")
 	}
 	return users, nil
@@ -63,7 +71,7 @@ func QueryAllUser() ([]User, error) {
 }
 
 func UpdateNickName(username, oldNickname, newNickname string) error {
-	users, err := QueryUser(oldNickname)
+	users, err := QueryUserByNickName(oldNickname)
 	if err != nil {
 		return errors.WithMessage(err, "No such user found")
 	}

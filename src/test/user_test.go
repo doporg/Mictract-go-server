@@ -38,7 +38,7 @@ func TestCURD(t *testing.T) {
 
 	show()
 
-	users, err := model.QueryUser("zhangsan")
+	users, err := model.QueryUserByNickName("zhangsan")
 	if err != nil {
 		global.Logger.Fatal("fail to query", zap.Error(err))
 	}
@@ -57,6 +57,7 @@ func show() {
 func createTables() {
 	err := global.DB.AutoMigrate(
 		model.User{},
+		model.Network{},
 	)
 
 	if err != nil {

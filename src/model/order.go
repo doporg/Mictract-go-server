@@ -1,6 +1,5 @@
 package model
 
 type Order struct {
-	Name 	string 	`json:"name"`
-	Port 	int 	`json:"port"`
+	Name string `json:"name"`
 }

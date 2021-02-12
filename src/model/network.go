@@ -1,58 +1,61 @@
 package model
 
 import (
-	"mictract/model/request"
 	"fmt"
+	"mictract/global"
+	"mictract/model/request"
+
+	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
+	"gopkg.in/yaml.v3"
 )
 
 type Network struct {
-	ID 				int 			`json:"id"`
-	Name			string			`json:"name" binding:"required"`
-	Orders			[]Order			`json:"orders" binding:"required"`
-	Organizations	[]Organization	`json:"organizations" binding:"required"`
-	Consensus		string 			`json:"consensus" binding:"required"`
-	TlsEnabled 		bool 			`json:"tlsEnabled"`
+	ID            int            `json:"id"`
+	Name          string         `json:"name" binding:"required"`
+	Orders        []Order        `json:"orders" binding:"required"`
+	Organizations []Organization `json:"organizations" binding:"required"`
+	Consensus     string         `json:"consensus" binding:"required"`
+	TlsEnabled    bool           `json:"tlsEnabled"`
 }
 
 var (
 	// just demo
-	networks = []Network {
+	// one orderer one org one peer
+	networks = []Network{
 		{
 			Name: "net1",
-			Orders: []Order {
+			Orders: []Order{
 				{
-					Name: "order1",
-					Port: 1080,
+					Name: "orderer.net1.com",
 				},
 			},
-			Organizations: []Organization {
+			Organizations: []Organization{
 				{
-					Name:  "org1",
-					Peers: []Peer {
+					Name: "org1",
+					Peers: []Peer{
 						{
-							Name: "peer1",
-							Port: 1080,
+							Name: "peer1.org1.net1.com",
 						},
 					},
 				},
 			},
-			Consensus: "solo",
+			Consensus:  "solo",
 			TlsEnabled: true,
 		},
 	}
-
 )
 
 func FindNetworks(pageInfo request.PageInfo) ([]Network, error) {
 	// TODO
 	// find all networks in the `/networks` directory
-	start := pageInfo.PageSize * ( pageInfo.Page - 1 )
+	start := pageInfo.PageSize * (pageInfo.Page - 1)
 	end := pageInfo.PageSize * pageInfo.Page
 	if end > len(networks) {
 		end = len(networks)
 	}
 
-	return networks[start: end], nil
+	return networks[start:end], nil
 }
 
 func FindNetworkByID(id int) (Network, error) {
@@ -80,4 +83,23 @@ func (n *Network) Deploy() {
 	// create channel
 	// join all peers into the channel
 	// set the anchor peers for each org
+}
+
+func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
+	if _, ok := global.SDKs[n.Name]; !ok {
+		sdkconfig, err := yaml.Marshal(NewSDKConfig(n))
+		if err != nil {
+			return nil, err
+		}
+		sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
+		if err != nil {
+			return nil, err
+		}
+		global.SDKs[n.Name] = sdk
+	}
+	return global.SDKs[n.Name], nil
+}
+
+func (n *Network) GenerateSDKConfig() ([]byte, error) {
+	return nil, nil
 }

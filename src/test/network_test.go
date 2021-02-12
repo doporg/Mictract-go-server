@@ -1,43 +1,42 @@
 package test
 
 import (
+	"fmt"
 	"mictract/model"
 	"mictract/model/request"
-	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var testNet = model.Network {
+var testNet = model.Network{
 	Name: "net1",
-	Orders: []model.Order {
+	Orders: []model.Order{
 		{
 			Name: "order1",
-			Port: 1080,
 		},
 	},
-	Organizations: []model.Organization {
+	Organizations: []model.Organization{
 		{
-			Name:  "org1",
-			Peers: []model.Peer {
+			Name: "org1",
+			Peers: []model.Peer{
 				{
 					Name: "peer1",
-					Port: 1080,
 				},
 			},
 		},
 	},
-	Consensus: "solo",
+	Consensus:  "solo",
 	TlsEnabled: true,
 }
 
 func TestCreateNetwork(t *testing.T) {
 	tests := []struct {
-		Net 	model.Network
-		Code 	int
-	} {
-		{ Net: testNet,			Code: 200 },
-		{ Net: model.Network{}, Code: 400 },
+		Net  model.Network
+		Code int
+	}{
+		{Net: testNet, Code: 200},
+		{Net: model.Network{}, Code: 400},
 	}
 
 	for _, tc := range tests {
@@ -49,7 +48,7 @@ func TestCreateNetwork(t *testing.T) {
 }
 
 func TestListNetworks(t *testing.T) {
-	w := Get("/network/", Parse(request.PageInfo {
+	w := Get("/network/", Parse(request.PageInfo{
 		Page:     1,
 		PageSize: 2,
 	}))

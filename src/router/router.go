@@ -2,6 +2,7 @@ package router
 
 import (
 	"mictract/api"
+
 	"github.com/gin-gonic/gin"
 )
 

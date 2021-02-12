@@ -2,71 +2,72 @@ package model
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"mictract/config"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type CaUser struct {
-	UserID 			int
-	OrganizationID	int
-	NetworkID 		int
-	Type 			string
-	Password		string
+	UserID         int
+	OrganizationID int
+	NetworkID      int
+	Type           string
+	Password       string
 }
 
-func NewPeerCaUser(peerID, orgID, netID int, password string) CaUser {
-	return CaUser{
-		Type: "peer",
-		UserID: peerID,
+func NewPeerCaUser(peerID, orgID, netID int, password string) *CaUser {
+	return &CaUser{
+		Type:           "peer",
+		UserID:         peerID,
 		OrganizationID: orgID,
-		NetworkID: netID,
-		Password: password,
+		NetworkID:      netID,
+		Password:       password,
 	}
 }
 
-func NewOrdererCaUser(ordererID, netID int, password string) CaUser {
+func NewOrdererCaUser(ordererID, netID int, password string) *CaUser {
 	// Note: in our rules, orderer belongs to ordererOrganization which is unique in a given network.
 	// So the OrganizationID here should be defined as a negative number.
-	return CaUser{
-		Type: "orderer",
-		UserID: ordererID,
+	return &CaUser{
+		Type:           "orderer",
+		UserID:         ordererID,
 		OrganizationID: -1,
-		NetworkID: netID,
-		Password: password,
+		NetworkID:      netID,
+		Password:       password,
 	}
 }
 
-func NewUserCaUser(userID, orgID, netID int, password string) CaUser {
-	return CaUser{
-		Type: "user",
-		UserID: userID,
+func NewUserCaUser(userID, orgID, netID int, password string) *CaUser {
+	return &CaUser{
+		Type:           "user",
+		UserID:         userID,
 		OrganizationID: orgID,
-		NetworkID: netID,
-		Password: password,
+		NetworkID:      netID,
+		Password:       password,
 	}
 }
 
-func NewAdminCaUser(userID, orgID, netID int, password string) CaUser {
-	return CaUser{
-		Type: "admin",
-		UserID: userID,
+func NewAdminCaUser(userID, orgID, netID int, password string) *CaUser {
+	return &CaUser{
+		Type:           "admin",
+		UserID:         userID,
 		OrganizationID: orgID,
-		NetworkID: netID,
-		Password: password,
+		NetworkID:      netID,
+		Password:       password,
 	}
 }
 
-func NewCaUserFromUsername(username string) (cu CaUser) {
+func NewCaUserFromUsername(username string) (cu *CaUser) {
 	return NewCaUserFromUsernameWithPassword(username, "")
 }
 
 // Normalize username and parse it into some kind of CaUser.
-func NewCaUserFromUsernameWithPassword(username, password string) (cu CaUser) {
+func NewCaUserFromUsernameWithPassword(username, password string) *CaUser {
 	username = strings.ToLower(username)
 	username = strings.ReplaceAll(username, "@", ".")
 	splicedUsername := strings.Split(username, ".")
@@ -78,6 +79,8 @@ func NewCaUserFromUsernameWithPassword(username, password string) (cu CaUser) {
 			*v, _ = strconv.Atoi(IdExp.FindStringSubmatch(splicedUsername[i])[2])
 		}
 	}
+
+	cu := &CaUser{}
 
 	switch {
 	case strings.Contains(username, "admin"):
@@ -116,7 +119,7 @@ func NewCaUserFromUsernameWithPassword(username, password string) (cu CaUser) {
 	}
 
 	cu.Password = password
-	return
+	return cu
 }
 
 func (cu *CaUser) IsInOrdererOrg() bool {
@@ -147,7 +150,7 @@ func (cu *CaUser) GetUsername() (username string) {
 
 func (cu *CaUser) GetBasePath() string {
 	username := cu.GetUsername()
-	netName	:= fmt.Sprintf("net%d", cu.NetworkID)
+	netName := fmt.Sprintf("net%d", cu.NetworkID)
 
 	basePath := filepath.Join(config.LOCAL_BASE_PATH, netName)
 	if cu.IsInOrdererOrg() {
@@ -203,8 +206,8 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 		filepath.Join(prefixPath, "ca.crt")} {
 		f, err := os.Create(filename)
 		if err != nil {
-				  return err
-				  }
+			return err
+		}
 		defer f.Close()
 
 		if strings.HasSuffix(filename, "key") {
@@ -256,7 +259,7 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 	defer f2.Close()
 	_, _ = f2.Write(cacert)
 
-	f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername() + "-cert.com"))
+	f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.com"))
 	if err != nil {
 		return err
 	}
@@ -271,4 +274,16 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 	_, _ = f4.Write(privkey)
 
 	return nil
+}
+
+func (cu *CaUser) GetCACert() string {
+	return "cacert"
+}
+
+func (cu *CaUser) GetCert() string {
+	return "cert"
+}
+
+func (cu *CaUser) GetPrivateKey() string {
+	return "privkey"
 }
