@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mictract-dev
+spec:
+  selector:
+    matchLabels:
+      app: mictract-dev
+  template:
+    metadata:
+      labels:
+        app: mictract-dev
+    spec:
+      containers:
+      - name: dev
+        image: tanglizi/mictract-dev:1.4
+        env:
+        - name: GOPROXY
+          value: https://goproxy.cn,direct
+        ports:
+        - name: dlv
+          containerPort: 2345
+        - name: ssh
+          containerPort: 22
+        volumeMounts:
+        - name: networks
+          mountPath: /mictract
+      volumes:
+      - name: networks
+        nfs:
+          path: /tmp/data/mictract
+          server: 192.168.1.4
