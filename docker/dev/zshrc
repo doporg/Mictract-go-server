@@ -1,0 +1,14 @@
+export ZSH="/root/.oh-my-zsh"
+
+ZSH_THEME="bira"
+
+plugins=(
+  git
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+)
+
+source $ZSH/oh-my-zsh.sh
+
+export PATH="/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export GOPROXY="https://goproxy.cn,direct"
