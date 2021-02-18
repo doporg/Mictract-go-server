@@ -19,7 +19,7 @@ var (
 
 func init() {
 	initLogger()
-	// initDB()
+	initDB()
 	initK8sClient()
 }
 
