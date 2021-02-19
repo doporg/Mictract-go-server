@@ -8,7 +8,6 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	"mictract/config"
 	"mictract/global"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 )
 
 type Orderer struct {
+	callback
 	OrdererID 	int
 	NetworkID 	int
 }
@@ -48,8 +48,21 @@ func (o *Orderer) GetSubPath() string {
 	)
 }
 
+func (o *Orderer) GetSelector() map[string]string {
+	return map[string]string{
+		"app": "mictract",
+		"net": strconv.Itoa(o.NetworkID),
+		"orderer": strconv.Itoa(o.OrdererID),
+		"tier": "orderer",
+	}
+}
+
+func (o *Orderer) GetPod() (*apiv1.Pod, error) {
+	return getPod(o)
+}
+
 // Connect to K8S to create the configMap.
-func (o *Orderer) CreateConfigMap(clientset *kubernetes.Clientset) {
+func (o *Orderer) CreateConfigMap() {
 	name := o.GetName()
 	// Note: local MSP id should be like "Orderer1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
 	localMSPId := fmt.Sprintf("Orderer%dMSP", o.OrdererID)
@@ -78,7 +91,7 @@ func (o *Orderer) CreateConfigMap(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		ConfigMaps(apiv1.NamespaceDefault).
 		Create(context.TODO(), configMap, metav1.CreateOptions{})
 
@@ -88,7 +101,7 @@ func (o *Orderer) CreateConfigMap(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the deployment.
-func (o *Orderer) CreateDeployment(clientset *kubernetes.Clientset) {
+func (o *Orderer) CreateDeployment() {
 	netPath := filepath.Join("network", "net" + strconv.Itoa(o.NetworkID))
 	subPath := o.GetSubPath()
 	name := o.GetName()
@@ -202,7 +215,7 @@ func (o *Orderer) CreateDeployment(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.AppsV1().
+	_, err := global.K8sClientset.AppsV1().
 		Deployments(apiv1.NamespaceDefault).
 		Create(context.TODO(), deployment, metav1.CreateOptions{})
 
@@ -212,7 +225,7 @@ func (o *Orderer) CreateDeployment(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the service.
-func (o *Orderer) CreateService(clientset *kubernetes.Clientset) {
+func (o *Orderer) CreateService() {
 	netID := strconv.Itoa(o.NetworkID)
 	ordererID := strconv.Itoa(o.OrdererID)
 	name := o.GetName()
@@ -242,7 +255,7 @@ func (o *Orderer) CreateService(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		Services(apiv1.NamespaceDefault).
 		Create(context.TODO(), service, metav1.CreateOptions{})
 
@@ -252,18 +265,18 @@ func (o *Orderer) CreateService(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create all the resources.
-func (o *Orderer) Create(clientset *kubernetes.Clientset) {
-	o.CreateConfigMap(clientset)
-	o.CreateDeployment(clientset)
-	o.CreateService(clientset)
+func (o *Orderer) Create() {
+	o.CreateConfigMap()
+	o.CreateDeployment()
+	o.CreateService()
 }
 
 // Connect to K8S to delete all the resources.
-func (o *Orderer) Delete(clientset *kubernetes.Clientset) {
+func (o *Orderer) Delete() {
 	var err error
 	name := o.GetName()
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		ConfigMaps(apiv1.NamespaceDefault).
 		Delete(context.TODO(), name + "-env", metav1.DeleteOptions{})
 
@@ -271,7 +284,7 @@ func (o *Orderer) Delete(clientset *kubernetes.Clientset) {
 		global.Logger.Error("Delete orderer config map error", zap.Error(err))
 	}
 
-	err = clientset.AppsV1().
+	err = global.K8sClientset.AppsV1().
 		Deployments(apiv1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
@@ -279,11 +292,19 @@ func (o *Orderer) Delete(clientset *kubernetes.Clientset) {
 		global.Logger.Error("Delete orderer deployment error", zap.Error(err))
 	}
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		Services(apiv1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
 		global.Logger.Error("Delete orderer service error", zap.Error(err))
 	}
+}
+
+func (o *Orderer) Watch() {
+	watch(o, &o.callback)
+}
+
+func (o *Orderer) ExecCommand(cmd ...string) (string, string, error) {
+	return execCommand(o, cmd...)
 }

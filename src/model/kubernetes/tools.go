@@ -6,19 +6,31 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"mictract/config"
 	"mictract/global"
 )
 
-type Tools struct {}
+type Tools struct {
+	callback
+}
 
 func (t *Tools) GetName() string {
 	return "tools"
 }
 
+func (t *Tools) GetSelector() map[string]string {
+	return map[string]string{
+		"app": "mictract",
+		"tier": "tools",
+	}
+}
+
+func (t *Tools) GetPod() (*corev1.Pod, error) {
+	return getPod(t)
+}
+
 // Connect to K8S to create the deployment.
-func (t *Tools) CreateDeployment(clientset *kubernetes.Clientset) {
+func (t *Tools) CreateDeployment() {
 	name := t.GetName()
 
 	matchLabels := map[string]string{
@@ -69,7 +81,7 @@ func (t *Tools) CreateDeployment(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.AppsV1().
+	_, err := global.K8sClientset.AppsV1().
 		Deployments(corev1.NamespaceDefault).
 		Create(context.TODO(), deployment, metav1.CreateOptions{})
 
@@ -79,20 +91,28 @@ func (t *Tools) CreateDeployment(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create all the resources.
-func (t *Tools) Create(clientset *kubernetes.Clientset) {
-	t.CreateDeployment(clientset)
+func (t *Tools) Create() {
+	t.CreateDeployment()
 }
 
 // Connect to K8S to delete all the resources.
-func (t *Tools) Delete(clientset *kubernetes.Clientset) {
+func (t *Tools) Delete() {
 	var err error
 	name := t.GetName()
 
-	err = clientset.AppsV1().
+	err = global.K8sClientset.AppsV1().
 		Deployments(corev1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
 		global.Logger.Error("Delete tools deployment error", zap.Error(err))
 	}
+}
+
+func (t *Tools) Watch() {
+	watch(t, &t.callback)
+}
+
+func (t *Tools) ExecCommand(cmd ...string) (string, string, error) {
+	return execCommand(t, cmd...)
 }

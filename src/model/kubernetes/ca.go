@@ -1,23 +1,23 @@
 package kubernetes
 
 import (
+	"context"
 	"fmt"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
-	"mictract/config"
-	"mictract/global"
-	"path/filepath"
-	"strconv"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"context"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"mictract/config"
+	"mictract/global"
+	"path/filepath"
+	"strconv"
 )
 
 type CA struct {
 	// Note: OrganizationID < 0  means it is a orderer CA.
+	callback
 	OrganizationID	int
 	NetworkID 		int
 }
@@ -74,8 +74,30 @@ func (ca *CA) GetUrl() string {
 	return fmt.Sprintf("ca.org%d.net%d.com", ca.OrganizationID, ca.NetworkID)
 }
 
+func (ca *CA) GetSelector() map[string]string {
+	if ca.IsOrdererCA() {
+		return map[string]string{
+			"app": "mictract",
+			"net": strconv.Itoa(ca.NetworkID),
+			"org": "orderer",
+			"tier": "ca",
+		}
+	}
+
+	return map[string]string{
+		"app": "mictract",
+		"net": strconv.Itoa(ca.NetworkID),
+		"org": strconv.Itoa(ca.OrganizationID),
+		"tier": "ca",
+	}
+}
+
+func (ca *CA) GetPod() (*corev1.Pod, error) {
+	return getPod(ca)
+}
+
 // Connect to K8S to create the configMap.
-func (ca *CA) CreateConfigMap(clientset *kubernetes.Clientset) {
+func (ca *CA) CreateConfigMap() {
 	name := ca.GetName()
 
 	configMap := &corev1.ConfigMap{
@@ -91,7 +113,7 @@ func (ca *CA) CreateConfigMap(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		ConfigMaps(corev1.NamespaceDefault).
 		Create(context.TODO(), configMap, metav1.CreateOptions{})
 
@@ -101,7 +123,7 @@ func (ca *CA) CreateConfigMap(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the deployment.
-func (ca *CA) CreateDeployment(clientset *kubernetes.Clientset) {
+func (ca *CA) CreateDeployment() {
 	subPath := ca.GetSubPath()
 	name := ca.GetName()
 
@@ -181,7 +203,7 @@ func (ca *CA) CreateDeployment(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.AppsV1().
+	_, err := global.K8sClientset.AppsV1().
 		Deployments(corev1.NamespaceDefault).
 		Create(context.TODO(), deployment, metav1.CreateOptions{})
 
@@ -191,7 +213,7 @@ func (ca *CA) CreateDeployment(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the service.
-func (ca *CA) CreateService(clientset *kubernetes.Clientset) {
+func (ca *CA) CreateService() {
 	name := ca.GetName()
 
 	selector := map[string]string{
@@ -230,7 +252,7 @@ func (ca *CA) CreateService(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		Services(corev1.NamespaceDefault).
 		Create(context.TODO(), service, metav1.CreateOptions{})
 
@@ -240,7 +262,7 @@ func (ca *CA) CreateService(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the ingress resource.
-func (ca *CA) CreateIngress(clientset *kubernetes.Clientset) {
+func (ca *CA) CreateIngress() {
 	name := ca.GetName()
 	pathType := netv1.PathTypePrefix
 
@@ -277,7 +299,7 @@ func (ca *CA) CreateIngress(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.NetworkingV1().
+	_, err := global.K8sClientset.NetworkingV1().
 		Ingresses(corev1.NamespaceDefault).
 		Create(context.TODO(), ingress, metav1.CreateOptions{})
 
@@ -287,19 +309,19 @@ func (ca *CA) CreateIngress(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create all the resources.
-func (ca *CA) Create(clientset *kubernetes.Clientset) {
-	ca.CreateConfigMap(clientset)
-	ca.CreateDeployment(clientset)
-	ca.CreateService(clientset)
-	// ca.CreateIngress(clientset)
+func (ca *CA) Create() {
+	ca.CreateConfigMap()
+	ca.CreateDeployment()
+	ca.CreateService()
+	// ca.CreateIngress(global.K8sClientset)
 }
 
 // Connect to K8S to delete all the resources.
-func (ca *CA) Delete(clientset *kubernetes.Clientset) {
+func (ca *CA) Delete() {
 	var err error
 	name := ca.GetName()
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		ConfigMaps(corev1.NamespaceDefault).
 		Delete(context.TODO(), name + "-env", metav1.DeleteOptions{})
 
@@ -307,7 +329,7 @@ func (ca *CA) Delete(clientset *kubernetes.Clientset) {
 		global.Logger.Error("Delete CA config map error", zap.Error(err))
 	}
 
-	err = clientset.AppsV1().
+	err = global.K8sClientset.AppsV1().
 		Deployments(corev1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
@@ -315,11 +337,19 @@ func (ca *CA) Delete(clientset *kubernetes.Clientset) {
 		global.Logger.Error("Delete CA deployment error", zap.Error(err))
 	}
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		Services(corev1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
 		global.Logger.Error("Delete CA service error", zap.Error(err))
 	}
+}
+
+func (ca *CA) Watch() {
+	watch(ca, &ca.callback)
+}
+
+func (ca *CA) ExecCommand(cmd ...string) (string, string, error) {
+	return execCommand(ca, cmd...)
 }

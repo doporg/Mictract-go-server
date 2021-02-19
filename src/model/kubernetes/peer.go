@@ -8,7 +8,6 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 	"mictract/config"
 	"mictract/global"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 )
 
 type Peer struct {
+	callback
 	PeerID			int
 	OrganizationID	int
 	NetworkID 		int
@@ -49,8 +49,22 @@ func (p *Peer) GetSubPath() string {
 	)
 }
 
+func (p *Peer) GetSelector() map[string]string {
+	return map[string]string{
+		"app": "mictract",
+		"net": strconv.Itoa(p.NetworkID),
+		"org": strconv.Itoa(p.OrganizationID),
+		"peer": strconv.Itoa(p.PeerID),
+		"tier": "peer",
+	}
+}
+
+func (p *Peer) GetPod() (*apiv1.Pod, error) {
+	return getPod(p)
+}
+
 // Connect to K8S to create the configMap.
-func (p *Peer) CreateConfigMap(clientset *kubernetes.Clientset) {
+func (p *Peer) CreateConfigMap() {
 	name := p.GetName()
 	peerId := p.GetDomain()
 	// Note: local MSP id should be like "Org1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
@@ -85,7 +99,7 @@ func (p *Peer) CreateConfigMap(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		ConfigMaps(apiv1.NamespaceDefault).
 		Create(context.TODO(), configMap, metav1.CreateOptions{})
 
@@ -95,7 +109,7 @@ func (p *Peer) CreateConfigMap(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the deployment.
-func (p *Peer) CreateDeployment(clientset *kubernetes.Clientset) {
+func (p *Peer) CreateDeployment() {
 	subPath := p.GetSubPath()
 	name := p.GetName()
 
@@ -210,7 +224,7 @@ func (p *Peer) CreateDeployment(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.AppsV1().
+	_, err := global.K8sClientset.AppsV1().
 		Deployments(apiv1.NamespaceDefault).
 		Create(context.TODO(), deployment, metav1.CreateOptions{})
 
@@ -220,7 +234,7 @@ func (p *Peer) CreateDeployment(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create the service.
-func (p *Peer) CreateService(clientset *kubernetes.Clientset) {
+func (p *Peer) CreateService() {
 	netID := strconv.Itoa(p.NetworkID)
 	orgID := strconv.Itoa(p.OrganizationID)
 	peerID := strconv.Itoa(p.PeerID)
@@ -252,7 +266,7 @@ func (p *Peer) CreateService(clientset *kubernetes.Clientset) {
 		},
 	}
 
-	_, err := clientset.CoreV1().
+	_, err := global.K8sClientset.CoreV1().
 		Services(apiv1.NamespaceDefault).
 		Create(context.TODO(), service, metav1.CreateOptions{})
 
@@ -262,26 +276,26 @@ func (p *Peer) CreateService(clientset *kubernetes.Clientset) {
 }
 
 // Connect to K8S to create all the resources.
-func (p *Peer) Create(clientset *kubernetes.Clientset) {
-	p.CreateConfigMap(clientset)
-	p.CreateDeployment(clientset)
-	p.CreateService(clientset)
+func (p *Peer) Create() {
+	p.CreateConfigMap()
+	p.CreateDeployment()
+	p.CreateService()
 }
 
 // Connect to K8S to delete all the resources.
-func (p *Peer) Delete(clientset *kubernetes.Clientset) {
+func (p *Peer) Delete() {
 	var err error
 	name := p.GetName()
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		ConfigMaps(apiv1.NamespaceDefault).
-		Delete(context.TODO(), name, metav1.DeleteOptions{})
+		Delete(context.TODO(), name + "-env", metav1.DeleteOptions{})
 
 	if err != nil {
 		global.Logger.Error("Delete peer config map error", zap.Error(err))
 	}
 
-	err = clientset.AppsV1().
+	err = global.K8sClientset.AppsV1().
 		Deployments(apiv1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
@@ -289,11 +303,19 @@ func (p *Peer) Delete(clientset *kubernetes.Clientset) {
 		global.Logger.Error("Delete peer deployment error", zap.Error(err))
 	}
 
-	err = clientset.CoreV1().
+	err = global.K8sClientset.CoreV1().
 		Services(apiv1.NamespaceDefault).
 		Delete(context.TODO(), name, metav1.DeleteOptions{})
 
 	if err != nil {
 		global.Logger.Error("Delete peer service error", zap.Error(err))
 	}
+}
+
+func (p *Peer) Watch() {
+	watch(p, &p.callback)
+}
+
+func (p *Peer) ExecCommand(cmd ...string) (string, string, error) {
+	return execCommand(p, cmd...)
 }
