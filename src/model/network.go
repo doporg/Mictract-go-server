@@ -3,9 +3,12 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"mictract/global"
+	"mictract/model/kubernetes"
 	"mictract/model/request"
 	"reflect"
+	"time"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
@@ -78,15 +81,155 @@ func DeleteNetworkByID(id int) error {
 	return nil
 }
 
-func (n *Network) Deploy() {
-	// TODO
-	// generate fabric-ca configurations and send them to k8s
-	// enroll admin and register users to generate MSPs
-	// generate order system and genesis block
-	// generate organizations configurations and send them to k8s
-	// create channel
-	// join all peers into the channel
-	// set the anchor peers for each org
+// TODO: need unit test
+// Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
+//	and then join the rest of peers and orderers.
+// The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
+func (n *Network) Deploy() (err error) {
+	// create ca and tools resources
+	tools := kubernetes.Tools{}
+	models := []kubernetes.K8sModel {
+		&tools,
+		kubernetes.NewPeerCA(n.ID ,1),
+		kubernetes.NewOrdererCA(n.ID),
+	}
+
+	for _, m := range models {
+		m.Create()
+	}
+
+	// TODO: make it sync
+	// wait for pulling images when first deploy
+	time.Sleep(5 * time.Second)
+
+	var sdk *fabsdk.FabricSDK
+	if sdk, err = n.GetSDK(); err != nil {
+		return err
+	}
+
+	// create an organization
+	{
+		var mspClient *msp.Client
+		caUrl := fmt.Sprintf("ca.org1.net%d.com", n.ID)
+		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("Org1")); err != nil {
+			return err
+		}
+
+		enrollOptions := []msp.EnrollmentOption {
+			msp.WithSecret("adminpw"),
+		}
+
+		if n.TlsEnabled {
+			enrollOptions = append(enrollOptions, msp.WithProfile("tls"))
+		}
+
+		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
+			return err
+		}
+
+		// register users of this organization
+		users := []*CaUser {
+			NewUserCaUser(1, 1, n.ID, "user1pw"),
+			NewAdminCaUser(1, 1, n.ID, "admin1pw"),
+			NewPeerCaUser(1, 1, n.ID, "peer1pw"),
+		}
+
+		for _, u := range users {
+			if err = u.Register(mspClient); err != nil {
+				return err
+			}
+		}
+
+		// enroll to build msp and tls directories
+		for _, u := range users {
+			if err = u.Enroll(mspClient, n.TlsEnabled); err != nil {
+				return err
+			}
+		}
+	}
+
+	// create an orderer organization
+	{
+		var mspClient *msp.Client
+		caUrl := fmt.Sprintf("ca.net%d.com", n.ID)
+		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("OrdererOrg")); err != nil {
+			return err
+		}
+
+		enrollOptions := []msp.EnrollmentOption {
+			msp.WithSecret("adminpw"),
+		}
+
+		if n.TlsEnabled {
+			enrollOptions = append(enrollOptions, msp.WithProfile("tls"))
+		}
+
+		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
+			return err
+		}
+
+		// register users of this organization
+		users := []*CaUser {
+			NewUserCaUser(1, -1, n.ID, "user1pw"),
+			NewAdminCaUser(1, -1, n.ID, "admin1pw"),
+			NewOrdererCaUser(1, n.ID, "orderer1pw"),
+		}
+
+		for _, u := range users {
+			if err = u.Register(mspClient); err != nil {
+				return err
+			}
+		}
+
+		// enroll to build msp and tls directories
+		for _, u := range users {
+			if err = u.Enroll(mspClient, n.TlsEnabled); err != nil {
+				return err
+			}
+		}
+	}
+
+	// configtx.yaml should be placed in `networks/netX/configtx.yaml`
+	// TODO: configtx.yaml
+
+	// generate the genesis block
+	_, _, err = tools.ExecCommand("configtxgen",
+		"-configPath", "/mictract/networks/net1/",
+		"-profile", "Genesis",
+		"-channelID", "system-channel",
+		"-outputBlock", "/mictract/networks/net1/genesis.block",
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// generate a default channel
+	_, _, err = tools.ExecCommand("configtxgen",
+		"-configPath", "/mictract/networks/net1/",
+		"-profile", "DefaultChannel",
+		"-channelID", "channel1",
+		"-outputCreateChannelTx", "/mictract/networks/net1/channel1.tx",
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// create rest of resources
+	models = []kubernetes.K8sModel {
+		kubernetes.NewOrderer(1, 1),
+		kubernetes.NewPeer(1, 1, 1),
+	}
+
+	for _, m := range models {
+		m.Create()
+	}
+
+	// TODO: join peers into the first channel
+	// TODO: create the rest of organizations
+
+	return nil
 }
 
 func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
