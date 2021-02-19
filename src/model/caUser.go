@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"mictract/config"
 	"os"
 	"path/filepath"
@@ -286,4 +287,59 @@ func (cu *CaUser) GetCert() string {
 
 func (cu *CaUser) GetPrivateKey() string {
 	return "privkey"
+}
+
+func (cu *CaUser) Register(mspClient *msp.Client) error {
+	request := &msp.RegistrationRequest{
+		Name:   cu.GetUsername(),
+		Type:   cu.Type,
+		Secret: cu.Password,
+	}
+
+	_, err := mspClient.Register(request)
+	if err != nil {
+		return errors.WithMessage(err, "fail to register "+cu.GetUsername())
+	}
+	return nil
+}
+
+// EnrollUser enroll 一个已经注册的用户并保存相关信息
+// username、networkName、orgName、mspType用于生成保存信息用的路径
+// isTLS 是否是用于TLS的证书？
+func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
+	var err error
+	username := cu.GetUsername()
+
+	if isTLS {
+		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithProfile("tls"))
+	} else {
+		err = mspClient.Enroll(username, msp.WithSecret(cu.Password))
+	}
+
+	if err != nil {
+		return errors.WithMessage(err, "fail to enroll "+username)
+	}
+
+	resp, err := mspClient.GetSigningIdentity(username)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get identity")
+	}
+
+	cert := resp.EnrollmentCertificate()
+	privkey, err := resp.PrivateKey().Bytes()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get private key")
+	}
+
+	cainfo, err := mspClient.GetCAInfo()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get cacert")
+	}
+
+	err = cu.BuildDir(cainfo.CAChain, cert, privkey)
+	if err != nil {
+		return errors.WithMessage(err, "fail to store info")
+	}
+
+	return nil
 }
