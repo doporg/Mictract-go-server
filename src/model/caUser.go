@@ -2,13 +2,14 @@ package model
 
 import (
 	"fmt"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"mictract/config"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 
 	"github.com/pkg/errors"
 )
@@ -273,6 +274,26 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 	}
 	defer f4.Close()
 	_, _ = f4.Write(privkey)
+
+	f5, err := os.Create(filepath.Join(prefixPath, "config.yaml"))
+	if err != nil {
+		return err
+	}
+	ouconfig := `NodeOUs:
+	Enable: true
+	ClientOUIdentifier:
+	  Certificate: cacerts/<filename>
+	  OrganizationalUnitIdentifier: client
+	PeerOUIdentifier:
+	  Certificate: cacerts/<filename>
+	  OrganizationalUnitIdentifier: peer
+	AdminOUIdentifier:
+	  Certificate: cacerts/<filename>
+	  OrganizationalUnitIdentifier: admin
+	OrdererOUIdentifier:
+	  Certificate: cacerts/<filename>
+	  OrganizationalUnitIdentifier: orderer`
+	_, _ = f5.Write([]byte(strings.Replace(ouconfig, "<filename>", "ca."+certNameSuffix, -1)))
 
 	return nil
 }
