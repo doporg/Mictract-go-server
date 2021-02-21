@@ -53,6 +53,35 @@ func TestSDKConfig(t *testing.T) {
 				},
 			},
 		},
+		Channels: []model.Channel{
+			{
+				Name: "mychannel",
+				Organizations: []model.Organization{
+					{
+						Name: "org1",
+						Peers: []model.Peer{
+							{
+								Name: "peer1.org1.net1.com",
+							},
+							{
+								Name: "peer2.org1.net1.com",
+							},
+						},
+					},
+					{
+						Name: "org2",
+						Peers: []model.Peer{
+							{
+								Name: "peer1.org2.net1.com",
+							},
+							{
+								Name: "peer2.org2.net1.com",
+							},
+						},
+					},
+				},
+			},
+		},
 		Consensus:  "solo",
 		TlsEnabled: true,
 	}

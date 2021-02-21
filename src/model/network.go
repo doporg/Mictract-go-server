@@ -3,12 +3,13 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"mictract/model/request"
 	"reflect"
 	"time"
+
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
@@ -22,6 +23,7 @@ type Network struct {
 	Name          string        `json:"name" binding:"required"`
 	Orders        Orders        `json:"orders" binding:"required"`
 	Organizations Organizations `json:"organizations" binding:"required"`
+	Channels      Channels      `json:"channels"`
 	Consensus     string        `json:"consensus" binding:"required"`
 	TlsEnabled    bool          `json:"tlsEnabled"`
 }
@@ -88,9 +90,9 @@ func DeleteNetworkByID(id int) error {
 func (n *Network) Deploy() (err error) {
 	// create ca and tools resources
 	tools := kubernetes.Tools{}
-	models := []kubernetes.K8sModel {
+	models := []kubernetes.K8sModel{
 		&tools,
-		kubernetes.NewPeerCA(n.ID ,1),
+		kubernetes.NewPeerCA(n.ID, 1),
 		kubernetes.NewOrdererCA(n.ID),
 	}
 
@@ -115,7 +117,7 @@ func (n *Network) Deploy() (err error) {
 			return err
 		}
 
-		enrollOptions := []msp.EnrollmentOption {
+		enrollOptions := []msp.EnrollmentOption{
 			msp.WithSecret("adminpw"),
 		}
 
@@ -128,7 +130,7 @@ func (n *Network) Deploy() (err error) {
 		}
 
 		// register users of this organization
-		users := []*CaUser {
+		users := []*CaUser{
 			NewUserCaUser(1, 1, n.ID, "user1pw"),
 			NewAdminCaUser(1, 1, n.ID, "admin1pw"),
 			NewPeerCaUser(1, 1, n.ID, "peer1pw"),
@@ -156,7 +158,7 @@ func (n *Network) Deploy() (err error) {
 			return err
 		}
 
-		enrollOptions := []msp.EnrollmentOption {
+		enrollOptions := []msp.EnrollmentOption{
 			msp.WithSecret("adminpw"),
 		}
 
@@ -169,7 +171,7 @@ func (n *Network) Deploy() (err error) {
 		}
 
 		// register users of this organization
-		users := []*CaUser {
+		users := []*CaUser{
 			NewUserCaUser(1, -1, n.ID, "user1pw"),
 			NewAdminCaUser(1, -1, n.ID, "admin1pw"),
 			NewOrdererCaUser(1, n.ID, "orderer1pw"),
@@ -217,7 +219,7 @@ func (n *Network) Deploy() (err error) {
 	}
 
 	// create rest of resources
-	models = []kubernetes.K8sModel {
+	models = []kubernetes.K8sModel{
 		kubernetes.NewOrderer(1, 1),
 		kubernetes.NewPeer(1, 1, 1),
 	}

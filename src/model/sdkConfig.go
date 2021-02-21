@@ -16,6 +16,8 @@ type SDKConfig struct {
 
 	Peers map[string]*SDKConfigNode `yaml:"peers"`
 
+	Channels map[string]*SDKConfigChannel `yaml:"channels"`
+
 	CertificateAuthorities map[string]*SDKCAs `yaml:"certificateAuthorities"`
 }
 
@@ -41,6 +43,15 @@ type SDKConfigNode struct {
 	TLSCACerts struct {
 		Pem string `yaml:"pem"`
 	} `yaml:"tlsCACerts"`
+}
+
+type SDKConfigChannel struct {
+	Peers map[string]struct {
+		EndorsingPeer  bool `yaml:"endorsingPeer"`
+		ChaincodeQuery bool `yaml:"chaincodeQuery"`
+		LedgerQuery    bool `yaml:"ledgerQuery"`
+		EventSource    bool `yaml:"eventSource"`
+	} `yaml:"peers"`
 }
 
 type SDKCAs struct {
@@ -69,6 +80,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		Organizations:          map[string]*SDKConfigOrganizations{},
 		Orderers:               map[string]*SDKConfigNode{},
 		Peers:                  map[string]*SDKConfigNode{},
+		Channels:               map[string]*SDKConfigChannel{},
 		CertificateAuthorities: map[string]*SDKCAs{},
 	}
 	// organizations
@@ -107,6 +119,16 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		}
 	}
 
+	//channels _default
+	sdkconfig.Channels["_default"] = &SDKConfigChannel{
+		Peers: map[string]struct {
+			EndorsingPeer  bool "yaml:\"endorsingPeer\""
+			ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+			LedgerQuery    bool "yaml:\"ledgerQuery\""
+			EventSource    bool "yaml:\"eventSource\""
+		}{},
+	}
+
 	// peers
 	for _, org := range n.Organizations {
 		for _, peer := range org.Peers {
@@ -118,7 +140,47 @@ func NewSDKConfig(n *Network) *SDKConfig {
 					Pem: NewCaUserFromUsername(peer.Name).GetCACert(),
 				},
 			}
+			//channels _default
+			sdkconfig.Channels["_default"].Peers[peer.Name] = struct {
+				EndorsingPeer  bool "yaml:\"endorsingPeer\""
+				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+				LedgerQuery    bool "yaml:\"ledgerQuery\""
+				EventSource    bool "yaml:\"eventSource\""
+			}{
+				EndorsingPeer:  true,
+				ChaincodeQuery: true,
+				LedgerQuery:    true,
+				EventSource:    true,
+			}
 		}
+	}
+
+	// channels else
+	for _, channel := range n.Channels {
+		sdkconfig.Channels[channel.Name] = &SDKConfigChannel{
+			Peers: map[string]struct {
+				EndorsingPeer  bool "yaml:\"endorsingPeer\""
+				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+				LedgerQuery    bool "yaml:\"ledgerQuery\""
+				EventSource    bool "yaml:\"eventSource\""
+			}{},
+		}
+		for _, org := range channel.Organizations {
+			for _, peer := range org.Peers {
+				sdkconfig.Channels[channel.Name].Peers[peer.Name] = struct {
+					EndorsingPeer  bool "yaml:\"endorsingPeer\""
+					ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+					LedgerQuery    bool "yaml:\"ledgerQuery\""
+					EventSource    bool "yaml:\"eventSource\""
+				}{
+					EndorsingPeer:  true,
+					ChaincodeQuery: true,
+					LedgerQuery:    true,
+					EventSource:    true,
+				}
+			}
+		}
+
 	}
 
 	// certificateAuthorities
