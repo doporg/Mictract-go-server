@@ -177,7 +177,7 @@ func (o *Orderer) CreateDeployment() {
 							Name:          "genesis-block",
 							VolumeSource: apiv1.VolumeSource{
 								NFS: &apiv1.NFSVolumeSource{
-									Server:   "192.168.1.4",
+									Server: config.NFS_SERVER_URL,
 									Path: 	  config.NFS_EXPOSED_PATH,
 								},
 							},
@@ -186,7 +186,7 @@ func (o *Orderer) CreateDeployment() {
 							Name:         "msp",
 							VolumeSource: apiv1.VolumeSource{
 								NFS: &apiv1.NFSVolumeSource{
-									Server:   "192.168.1.4",
+									Server: config.NFS_SERVER_URL,
 									Path: 	  config.NFS_EXPOSED_PATH,
 								},
 							},
@@ -195,7 +195,7 @@ func (o *Orderer) CreateDeployment() {
 							Name:         "tls",
 							VolumeSource: apiv1.VolumeSource{
 								NFS: &apiv1.NFSVolumeSource{
-									Server:   "192.168.1.4",
+									Server: config.NFS_SERVER_URL,
 									Path: 	  config.NFS_EXPOSED_PATH,
 								},
 							},
@@ -204,7 +204,7 @@ func (o *Orderer) CreateDeployment() {
 							Name:         "production",
 							VolumeSource: apiv1.VolumeSource{
 								NFS: &apiv1.NFSVolumeSource{
-									Server:   "192.168.1.4",
+									Server: config.NFS_SERVER_URL,
 									Path:     config.NFS_EXPOSED_PATH,
 								},
 							},

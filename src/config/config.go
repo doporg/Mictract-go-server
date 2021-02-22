@@ -16,4 +16,6 @@ var (
 
 	// The config file path, which to connect k8s.
 	K8S_CONFIG			= filepath.Join(LOCAL_MOUNT_PATH, "kube-config.yaml")
+
+	NFS_SERVER_URL		= "nfs-server"
 )

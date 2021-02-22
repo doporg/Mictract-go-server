@@ -70,7 +70,7 @@ func (t *Tools) CreateDeployment() {
 							Name:         "networks",
 							VolumeSource: corev1.VolumeSource{
 								NFS: &corev1.NFSVolumeSource{
-									Server:   "192.168.1.4",
+									Server: config.NFS_SERVER_URL,
 									Path: config.NFS_EXPOSED_PATH,
 								},
 							},
