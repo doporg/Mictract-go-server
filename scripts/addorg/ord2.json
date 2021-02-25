@@ -1,8 +1,0 @@
-[
-	"orderer.example.com:7050",
-	"orderer2.example.com:8050",
-	"orderer3.example.com:9050",
-	"orderer4.example.com:10050",
-	"orderer5.example.com:11050",
-	"lilingj.github.io:1111"
-]

@@ -24,8 +24,11 @@ type Network struct {
 	Orders        Orders        `json:"orders" binding:"required"`
 	Organizations Organizations `json:"organizations" binding:"required"`
 	Channels      Channels      `json:"channels"`
-	Consensus     string        `json:"consensus" binding:"required"`
-	TlsEnabled    bool          `json:"tlsEnabled"`
+
+	Consensus  string `json:"consensus" binding:"required"`
+	TlsEnabled bool   `json:"tlsEnabled"`
+
+	SDK *fabsdk.FabricSDK
 }
 
 var (
@@ -234,17 +237,24 @@ func (n *Network) Deploy() (err error) {
 	return nil
 }
 
+func (n *Network) UpdateSDK() error {
+	sdkconfig, err := yaml.Marshal(NewSDKConfig(n))
+	if err != nil {
+		return err
+	}
+	sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
+	if err != nil {
+		return err
+	}
+	global.SDKs[n.Name] = sdk
+	return nil
+}
+
 func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
 	if _, ok := global.SDKs[n.Name]; !ok {
-		sdkconfig, err := yaml.Marshal(NewSDKConfig(n))
-		if err != nil {
+		if err := n.UpdateSDK(); err != nil {
 			return nil, err
 		}
-		sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
-		if err != nil {
-			return nil, err
-		}
-		global.SDKs[n.Name] = sdk
 	}
 	return global.SDKs[n.Name], nil
 }
