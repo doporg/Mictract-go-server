@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/fvbock/endless v0.0.0-20170109170031-447134032cb6
 	github.com/gin-gonic/gin v1.6.3
+	github.com/golang/protobuf v1.4.3
 	github.com/hyperledger/fabric-sdk-go v1.0.0
 	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

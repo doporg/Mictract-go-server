@@ -16,7 +16,7 @@ WIP now.
 
 2. expose the data directory, which will be used for storing networks. Note: this path is corresponds to `config.NFS_EXPOSED_PATH` in the source code.
    ```
-   /your/exposed/path    *(rw,all_squash,fsid=0,anonuid=0,anongid=0,insecure)
+   /var/mictract    *(rw,all_squash,fsid=0,anonuid=0,anongid=0,insecure)
    ```
 
 3. run it.
@@ -30,6 +30,33 @@ WIP now.
    x.x.x.x             nfs-server
    ```
 
+5. put your k8s config on `config.NFS_EXPOSED_PATH`, your file should be like this:
+   
+   Note: the `certificate-authority-data` and `client-key-data` are base64 encoded.
+   
+   ```yaml
+   apiVersion: v1
+   clusters:
+   - cluster:
+     certificate-authority-data: LS0tL...UZJQ0FURS0tLS0tCg==
+     extensions:
+     server: https://kubernetes:443
+     name: minikube
+     contexts:
+   - context:
+     cluster: minikube
+     namespace: default
+     user: minikube
+     name: minikube
+     current-context: minikube
+     kind: Config
+     preferences: {}
+     users:
+   - name: minikube
+     user:
+     client-certificate-data: LS0tL...CBDRVJUSUZJQ0FURS0tLS0tCg==
+     client-key-data: LS0tL...FJTQSBQUklWQVRFIEtFWS0tLS0tCg==
+   ```
    
 
 ### Development environment [optional] 

@@ -5,7 +5,7 @@ import "path/filepath"
 var (
 	// NFS_EXPOSED_PATH is the path of the network data which NFS server exposed.
 	// This path is needed for Kubernetes deployment volume.
-	NFS_EXPOSED_PATH = "/tmp/data/mictract"
+	NFS_EXPOSED_PATH = "/var/mictract"
 
 	// LOCAL_MOUNT_PATH is the path where the network data mounted in each container.
 	// This path is needed for Kubernetes deployment volume.
