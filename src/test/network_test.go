@@ -2,6 +2,8 @@ package test
 
 import (
 	"fmt"
+	"go.uber.org/zap"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"testing"
@@ -13,15 +15,15 @@ var testNet = model.Network{
 	Name: "net1",
 	Orders: []model.Order{
 		{
-			Name: "order1",
+			Name: "order1.net1.com",
 		},
 	},
 	Organizations: []model.Organization{
 		{
-			Name: "org1",
+			Name: "org1.net1.com",
 			Peers: []model.Peer{
 				{
-					Name: "peer1",
+					Name: "peer1.org1.net1.com",
 				},
 			},
 		},
@@ -55,4 +57,13 @@ func TestListNetworks(t *testing.T) {
 
 	fmt.Println(w.Body.String())
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestDeployNetwork(t *testing.T) {
+	var err error
+	if err = testNet.Deploy(); err != nil {
+		global.Logger.Error("testing", zap.Error(err))
+	}
+
+	assert.Equal(t, true, err == nil)
 }
