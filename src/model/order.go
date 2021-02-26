@@ -5,6 +5,8 @@ import (
 )
 
 type Order struct {
+	// Name should be domain name.
+	// Example: orderer1.net1.com
 	Name string `json:"name"`
 }
 

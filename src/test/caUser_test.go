@@ -22,7 +22,7 @@ func TestSaveCaUser(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		caUser := model.NewCaUserFromUsername(tc.Username)
+		caUser := model.NewCaUserFromDomainName(tc.Username)
 		_ = caUser.BuildDir([]byte("CA cert test"), []byte("cert test"), []byte("priv key test"))
 	}
 }
@@ -96,7 +96,7 @@ func TestNewCaUserFromUsername(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		caUser := model.NewCaUserFromUsername(tc.Username)
+		caUser := model.NewCaUserFromDomainName(tc.Username)
 		assert.Equal(t, tc.CaUser, caUser)
 	}
 }

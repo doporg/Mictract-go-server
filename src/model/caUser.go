@@ -2,7 +2,9 @@ package model
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"mictract/config"
+	"mictract/global"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -64,28 +66,34 @@ func NewAdminCaUser(userID, orgID, netID int, password string) *CaUser {
 	}
 }
 
-func NewCaUserFromUsername(username string) (cu *CaUser) {
-	return NewCaUserFromUsernameWithPassword(username, "")
+// !!!NOTE: Username here means domain name.
+// Example: peer1.org1.net1.com
+func NewCaUserFromDomainName(domain string) (cu *CaUser) {
+	return NewCaUserFromDomainNameWithPassword(domain, "")
 }
 
 // Normalize username and parse it into some kind of CaUser.
-func NewCaUserFromUsernameWithPassword(username, password string) *CaUser {
-	username = strings.ToLower(username)
-	username = strings.ReplaceAll(username, "@", ".")
-	splicedUsername := strings.Split(username, ".")
+func NewCaUserFromDomainNameWithPassword(domain, password string) *CaUser {
+	domain = strings.ToLower(domain)
+	domain = strings.ReplaceAll(domain, "@", ".")
+	splicedUsername := strings.Split(domain, ".")
 
-	dotCount := strings.Count(username, ".")
+	dotCount := strings.Count(domain, ".")
 	IdExp := regexp.MustCompile("^(user|admin|peer|orderer|org|net)([0-9]+)$")
 	assignIdByOrder := func(str ...*int) {
 		for i, v := range str {
-			*v, _ = strconv.Atoi(IdExp.FindStringSubmatch(splicedUsername[i])[2])
+			if matches := IdExp.FindStringSubmatch(splicedUsername[i]); len(matches) < 2 {
+				global.Logger.Error("Error occurred in matching ID", zap.String("domainName", domain))
+			} else {
+				*v, _ = strconv.Atoi(matches[2])
+			}
 		}
 	}
 
 	cu := &CaUser{}
 
 	switch {
-	case strings.Contains(username, "admin"):
+	case strings.Contains(domain, "admin"):
 		cu.Type = "admin"
 		if dotCount <= 2 {
 			// match: admin1.net1.com
@@ -96,7 +104,7 @@ func NewCaUserFromUsernameWithPassword(username, password string) *CaUser {
 			assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
 		}
 
-	case strings.Contains(username, "user"):
+	case strings.Contains(domain, "user"):
 		cu.Type = "user"
 		if dotCount <= 2 {
 			// match: user1.net1.com
@@ -107,12 +115,12 @@ func NewCaUserFromUsernameWithPassword(username, password string) *CaUser {
 			assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
 		}
 
-	case strings.Contains(username, "peer"):
+	case strings.Contains(domain, "peer"):
 		// match: peer1.org1.net1.com
 		cu.Type = "peer"
 		assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
 
-	case strings.Contains(username, "orderer"):
+	case strings.Contains(domain, "orderer"):
 		// match: orderer1.net1.com
 		cu.Type = "orderer"
 		assignIdByOrder(&cu.UserID, &cu.NetworkID)

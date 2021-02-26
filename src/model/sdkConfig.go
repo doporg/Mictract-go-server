@@ -107,14 +107,14 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// orderers
 	for _, orderer := range n.Orders {
-		causer := NewCaUserFromUsername(orderer.Name)
+		causer := NewCaUserFromDomainName(orderer.Name)
 		causer.GetCACert()
 		sdkconfig.Orderers[orderer.Name] = &SDKConfigNode{
 			URL: "grpcs://" + orderer.Name + ":7050",
 			TLSCACerts: struct {
 				Pem string "yaml:\"pem\""
 			}{
-				Pem: NewCaUserFromUsername(orderer.Name).GetCACert(),
+				Pem: NewCaUserFromDomainName(orderer.Name).GetCACert(),
 			},
 		}
 	}
@@ -137,7 +137,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 				TLSCACerts: struct {
 					Pem string "yaml:\"pem\""
 				}{
-					Pem: NewCaUserFromUsername(peer.Name).GetCACert(),
+					Pem: NewCaUserFromDomainName(peer.Name).GetCACert(),
 				},
 			}
 			//channels _default
@@ -188,7 +188,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		URL: "ca." + n.Name + ".com",
 		TLSCACerts: struct {
 			Pem string "yaml:\"pem\""
-		}{Pem: NewCaUserFromUsername("orderer1." + n.Name + ".com").GetCACert()},
+		}{Pem: NewCaUserFromDomainName("orderer1." + n.Name + ".com").GetCACert()},
 		Registrar: struct {
 			EnrollId     string "yaml:\"enrollId\""
 			EnrollSecret string "yaml:\"enrollSecret\""

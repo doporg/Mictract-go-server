@@ -256,6 +256,7 @@ func (ca *CA) CreateService() {
 		Services(corev1.NamespaceDefault).
 		Create(context.TODO(), service, metav1.CreateOptions{})
 
+	// if err != nil && strings.HasSuffix(err.Error(), "already exists") {
 	if err != nil {
 		global.Logger.Error("Create CA service error", zap.Error(err))
 	}

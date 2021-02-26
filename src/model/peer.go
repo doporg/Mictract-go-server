@@ -5,6 +5,8 @@ import (
 )
 
 type Peer struct {
+	// Name should be domain name.
+	// Example: peer1.org1.net1.com
 	Name string `json:"name"`
 }
 
