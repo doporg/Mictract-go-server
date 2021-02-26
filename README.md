@@ -30,7 +30,7 @@ WIP now.
    x.x.x.x             nfs-server
    ```
 
-5. put your k8s config on `config.NFS_EXPOSED_PATH`, your file should be like this:
+5. put your k8s config and `template/configtx.yaml.tpl` on `config.NFS_EXPOSED_PATH`, your `kube-config.yaml` should be like this:
    
    Note: the `certificate-authority-data` and `client-key-data` are base64 encoded.
    
@@ -58,6 +58,12 @@ WIP now.
      client-key-data: LS0tL...FJTQSBQUklWQVRFIEtFWS0tLS0tCg==
    ```
    
+6. check your network directory, which should be like this:
+   ```text
+   mictract
+   ├── configtx.yaml.tpl
+   └── kube-config.yaml
+   ```
 
 ### Development environment [optional] 
 
