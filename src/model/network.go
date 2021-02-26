@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
-	"io/ioutil"
+	mConfig "mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"mictract/model/request"
+	"os"
+	"path"
 	"reflect"
 	"time"
 
@@ -243,19 +244,16 @@ func (n *Network) Deploy() (err error) {
 }
 
 func (n *Network) RenderConfigtx() error {
-	var writer io.Writer
-	templ := template.Must(template.ParseFiles("src/templ/configtx.yaml.tpl"))
-	if err := templ.Execute(writer, n.ID); err != nil {
-		return err
-	}
-
-	var buf []byte
-	if _, err := writer.Write(buf); err != nil {
-		return err
-	}
+	templ := template.Must(template.ParseFiles(path.Join(mConfig.LOCAL_MOUNT_PATH, "configtx.yaml.tpl")))
 
 	filename := fmt.Sprintf("/mictract/networks/net%d/configtx.yaml", n.ID)
-	if err := ioutil.WriteFile(filename, buf, 0); err != nil {
+	writer, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	if err := templ.Execute(writer, n); err != nil {
 		return err
 	}
 

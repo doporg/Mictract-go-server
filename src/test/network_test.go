@@ -67,3 +67,12 @@ func TestDeployNetwork(t *testing.T) {
 
 	assert.Equal(t, true, err == nil)
 }
+
+func TestRenderConfigtx(t *testing.T) {
+	var err error
+	if err = testNet.RenderConfigtx(); err != nil {
+		global.Logger.Error("testing", zap.Error(err))
+	}
+
+	assert.Equal(t, true, err == nil)
+}

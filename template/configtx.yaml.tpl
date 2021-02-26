@@ -15,7 +15,7 @@ Organizations:
                 Rule: "OR('OrdererMSP.admin')"
 
         OrdererEndpoints:
-            - orderer1.net{{.ID}}.one:7050
+            - orderer1.net{{.ID}}.com:7050
 
     - &Org1
         Name: Org1
