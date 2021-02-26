@@ -3,6 +3,9 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"io"
+	"io/ioutil"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"mictract/model/request"
@@ -195,14 +198,16 @@ func (n *Network) Deploy() (err error) {
 	}
 
 	// configtx.yaml should be placed in `networks/netX/configtx.yaml`
-	// TODO: configtx.yaml
+	if err = n.RenderConfigtx(); err != nil {
+		return err
+	}
 
 	// generate the genesis block
 	_, _, err = tools.ExecCommand("configtxgen",
-		"-configPath", "/mictract/networks/net1/",
+		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
 		"-profile", "Genesis",
 		"-channelID", "system-channel",
-		"-outputBlock", "/mictract/networks/net1/genesis.block",
+		"-outputBlock", fmt.Sprintf("/mictract/networks/net%d/genesis.block", n.ID),
 	)
 
 	if err != nil {
@@ -211,10 +216,10 @@ func (n *Network) Deploy() (err error) {
 
 	// generate a default channel
 	_, _, err = tools.ExecCommand("configtxgen",
-		"-configPath", "/mictract/networks/net1/",
+		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
 		"-profile", "DefaultChannel",
 		"-channelID", "channel1",
-		"-outputCreateChannelTx", "/mictract/networks/net1/channel1.tx",
+		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel1.tx", n.ID),
 	)
 
 	if err != nil {
@@ -223,8 +228,8 @@ func (n *Network) Deploy() (err error) {
 
 	// create rest of resources
 	models = []kubernetes.K8sModel{
-		kubernetes.NewOrderer(1, 1),
-		kubernetes.NewPeer(1, 1, 1),
+		kubernetes.NewOrderer(n.ID, 1),
+		kubernetes.NewPeer(n.ID, 1, 1),
 	}
 
 	for _, m := range models {
@@ -233,6 +238,26 @@ func (n *Network) Deploy() (err error) {
 
 	// TODO: join peers into the first channel
 	// TODO: create the rest of organizations
+
+	return nil
+}
+
+func (n *Network) RenderConfigtx() error {
+	var writer io.Writer
+	templ := template.Must(template.ParseFiles("src/templ/configtx.yaml.tpl"))
+	if err := templ.Execute(writer, n.ID); err != nil {
+		return err
+	}
+
+	var buf []byte
+	if _, err := writer.Write(buf); err != nil {
+		return err
+	}
+
+	filename := fmt.Sprintf("/mictract/networks/net%d/configtx.yaml", n.ID)
+	if err := ioutil.WriteFile(filename, buf, 0); err != nil {
+		return err
+	}
 
 	return nil
 }
