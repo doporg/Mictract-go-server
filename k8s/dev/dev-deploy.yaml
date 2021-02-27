@@ -28,5 +28,6 @@ spec:
       volumes:
       - name: networks
         nfs:
-          path: /tmp/data/mictract
+          # configure your NFS server, `path` means `NFS_EXPOSED_PATH`
+          path: /var/mictract
           server: 192.168.1.4

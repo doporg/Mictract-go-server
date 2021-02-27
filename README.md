@@ -74,6 +74,7 @@ WIP now.
 
    minikube start
    ```
+   Then you can use `minikube ip` as kubernetes api-server ip.
 
 2. edit `dev-deploy.yaml`, and run mictract-dev env, where the dlv and sftp is deployed.
    ```shell
