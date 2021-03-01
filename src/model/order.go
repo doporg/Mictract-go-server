@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql/driver"
+	"fmt"
 )
 
 type Order struct {
@@ -19,4 +20,9 @@ func (orderers *Orders) Scan(value interface{}) error {
 
 func (orderers *Orders) Value() (driver.Value, error) {
 	return value(orderers)
+}
+
+func (orderer *Order)getURL() string {
+	causer := NewCaUserFromDomainName(orderer.Name)
+	return fmt.Sprintf("grpcs://orderer%d-org%d-net%d:7050", causer.UserID, causer.OrganizationID, causer.NetworkID)
 }

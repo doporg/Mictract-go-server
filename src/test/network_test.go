@@ -2,25 +2,29 @@ package test
 
 import (
 	"fmt"
+	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
+	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 	"mictract/global"
 	"mictract/model"
-	"mictract/model/request"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 var testNet = model.Network{
+	ID: 1,
 	Name: "net1",
 	Orders: []model.Order{
 		{
-			Name: "order1.net1.com",
+			Name: "orderer1.net1.com",
 		},
 	},
 	Organizations: []model.Organization{
 		{
-			Name: "org1.net1.com",
+			Name: "org1",
 			Peers: []model.Peer{
 				{
 					Name: "peer1.org1.net1.com",
@@ -31,7 +35,7 @@ var testNet = model.Network{
 	Consensus:  "solo",
 	TlsEnabled: true,
 }
-
+/*
 func TestCreateNetwork(t *testing.T) {
 	tests := []struct {
 		Net  model.Network
@@ -58,7 +62,7 @@ func TestListNetworks(t *testing.T) {
 	fmt.Println(w.Body.String())
 	assert.Equal(t, 200, w.Code)
 }
-
+*/
 func TestDeployNetwork(t *testing.T) {
 	var err error
 	if err = testNet.Deploy(); err != nil {
@@ -75,4 +79,37 @@ func TestRenderConfigtx(t *testing.T) {
 	}
 
 	assert.Equal(t, true, err == nil)
+}
+func TestGetSDK(t *testing.T) {
+	// testNet.GetSDK()
+
+	sdkconfig, err := yaml.Marshal(model.NewSDKConfig(&testNet))
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println(string((sdkconfig)))
+
+	sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	global.SDKs[testNet.Name] = sdk
+}
+
+func TestGetCAInfo(t *testing.T) {
+	sdk, err := testNet.GetSDK()
+	if err != nil {
+		global.Logger.Error("fail to get sdk", zap.Error(err))
+	}
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance("ca.org1.net1.com"), mspclient.WithOrg("org1"))
+	if err != nil {
+		global.Logger.Error("fail to get mspCient", zap.Error(err))
+	}
+
+	cainfo, err := mspClient.GetCAInfo()
+	if err != nil {
+		global.Logger.Error("fail to get CAInfo", zap.Error(err))
+	}
+	fmt.Println(string(cainfo.CAChain))
 }

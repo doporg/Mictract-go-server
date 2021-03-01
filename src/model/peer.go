@@ -2,6 +2,7 @@ package model
 
 import (
 	"database/sql/driver"
+	"fmt"
 )
 
 type Peer struct {
@@ -19,6 +20,12 @@ func (peers *Peers) Scan(value interface{}) error {
 
 func (peers *Peers) Value() (driver.Value, error) {
 	return value(peers)
+}
+
+func (peer *Peer) GetURL() string {
+	causer := NewCaUserFromDomainName(peer.Name)
+	return fmt.Sprintf("grpcs://peer%d-org%d-net%d:7051", causer.UserID, causer.OrganizationID, causer.NetworkID)
+	// return "grpcs://" + strings.ReplaceAll(peer.Name, ".", "-") + ":7051"
 }
 
 func (peer *Peer) GetTLSCert() string {

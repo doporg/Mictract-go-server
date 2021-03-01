@@ -57,7 +57,7 @@ type SDKConfigChannel struct {
 type SDKCAs struct {
 	URL        string `yaml:"url"`
 	TLSCACerts struct {
-		Pem string `yaml:"pem"`
+		Pem []string `yaml:"pem"`
 	} `yaml:"tlsCACerts"`
 	Registrar struct {
 		EnrollId     string `yaml:"enrollId"`
@@ -107,10 +107,8 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// orderers
 	for _, orderer := range n.Orders {
-		causer := NewCaUserFromDomainName(orderer.Name)
-		causer.GetCACert()
 		sdkconfig.Orderers[orderer.Name] = &SDKConfigNode{
-			URL: "grpcs://" + orderer.Name + ":7050",
+			URL: orderer.getURL(),
 			TLSCACerts: struct {
 				Pem string "yaml:\"pem\""
 			}{
@@ -133,7 +131,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	for _, org := range n.Organizations {
 		for _, peer := range org.Peers {
 			sdkconfig.Peers[peer.Name] = &SDKConfigNode{
-				URL: "grpcs://" + peer.Name + ":7051",
+				URL: peer.GetURL(),
 				TLSCACerts: struct {
 					Pem string "yaml:\"pem\""
 				}{
@@ -185,10 +183,10 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// certificateAuthorities
 	sdkconfig.CertificateAuthorities["ca."+n.Name+".com"] = &SDKCAs{
-		URL: "ca." + n.Name + ".com",
+		URL: "ca-" + n.Name,
 		TLSCACerts: struct {
-			Pem string "yaml:\"pem\""
-		}{Pem: NewCaUserFromDomainName("orderer1." + n.Name + ".com").GetCACert()},
+			Pem []string "yaml:\"pem\""
+		}{Pem: []string{NewCaUserFromDomainName("orderer1." + n.Name + ".com").GetCACert()}},
 		Registrar: struct {
 			EnrollId     string "yaml:\"enrollId\""
 			EnrollSecret string "yaml:\"enrollSecret\""
@@ -196,6 +194,21 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			EnrollId:     "admin",
 			EnrollSecret: "adminpw",
 		},
+	}
+	for _, org := range n.Organizations {
+		sdkconfig.CertificateAuthorities["ca." + org.Name + "." + n.Name + ".com"] = &SDKCAs{
+			URL: "https://ca-" + org.Name + "-" + n.Name + ":7054",
+			TLSCACerts: struct {
+				Pem []string "yaml:\"pem\""
+			}{Pem: []string{NewCaUserFromDomainName(org.Peers[0].Name).GetCACert()}},
+			Registrar: struct {
+				EnrollId     string "yaml:\"enrollId\""
+				EnrollSecret string "yaml:\"enrollSecret\""
+			}{
+				EnrollId:     "admin",
+				EnrollSecret: "adminpw",
+			},
+		}
 	}
 	return &sdkconfig
 }

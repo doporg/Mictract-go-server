@@ -111,6 +111,23 @@ func (n *Network) Deploy() (err error) {
 	// wait for pulling images when first deploy
 	time.Sleep(5 * time.Second)
 
+	// call CaUser.GenerateOrgMsp for GetSDK
+	causers := []CaUser {
+		CaUser {
+			OrganizationID: -1,
+			NetworkID: n.ID,
+		},
+		CaUser {
+			OrganizationID: 1,
+			NetworkID: n.ID,
+		},
+	}
+	for _, causer := range causers {
+		if err := causer.GenerateOrgMsp(); err != nil {
+			return err
+		}
+	}
+
 	var sdk *fabsdk.FabricSDK
 	if sdk, err = n.GetSDK(); err != nil {
 		return err
@@ -123,7 +140,7 @@ func (n *Network) Deploy() (err error) {
 		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("Org1")); err != nil {
 			return err
 		}
-
+/*
 		enrollOptions := []msp.EnrollmentOption{
 			msp.WithSecret("adminpw"),
 		}
@@ -134,7 +151,7 @@ func (n *Network) Deploy() (err error) {
 
 		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
 			return err
-		}
+		}*/
 
 		// register users of this organization
 		users := []*CaUser{
@@ -164,7 +181,7 @@ func (n *Network) Deploy() (err error) {
 		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("OrdererOrg")); err != nil {
 			return err
 		}
-
+/*
 		enrollOptions := []msp.EnrollmentOption{
 			msp.WithSecret("adminpw"),
 		}
@@ -176,7 +193,7 @@ func (n *Network) Deploy() (err error) {
 		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
 			return err
 		}
-
+*/
 		// register users of this organization
 		users := []*CaUser{
 			NewUserCaUser(1, -1, n.ID, "user1pw"),
