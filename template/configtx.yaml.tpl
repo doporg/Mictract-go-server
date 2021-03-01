@@ -2,7 +2,7 @@ Organizations:
     - &OrdererOrg
         Name: OrdererOrg
         ID: OrdererMSP
-        MSPDir: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/orderers/orderer1.net{{.ID}}.com/msp
+        MSPDir: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/msp
         Policies:
             Readers:
                 Type: Signature
@@ -20,7 +20,7 @@ Organizations:
     - &Org1
         Name: Org1
         ID: Org1MSP
-        MSPDir: /mictract/networks/net{{.ID}}/peerOrganizations/org1.net{{.ID}}.com/peers/peer1.org1.net{{.ID}}.com/msp
+        MSPDir: /mictract/networks/net{{.ID}}/peerOrganizations/org1.net{{.ID}}.com/msp
         Policies:
             Readers:
                 Type: Signature

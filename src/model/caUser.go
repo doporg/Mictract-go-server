@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"io"
+	"io/ioutil"
 	"mictract/config"
 	"mictract/global"
 	"os"
@@ -306,16 +308,116 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 	return nil
 }
 
+// copy file
+func copy(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
+}
+
+func (cu *CaUser) GetOrgMspDir() string {
+	netName := fmt.Sprintf("net%d", cu.NetworkID)
+
+	basePath := filepath.Join(config.LOCAL_BASE_PATH, netName)
+
+	if cu.OrganizationID == -1 {
+		// ordererOrganizations
+		basePath = filepath.Join(basePath, "ordererOrganizations", netName + ".com")
+	} else {
+		// peerOrganizations
+		basePath = filepath.Join(basePath, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", cu.OrganizationID, cu.NetworkID))
+	}
+
+	// Build MSP directory by the given CaUser.
+	return filepath.Join(basePath, "msp")
+}
+
+func (cu *CaUser) GenerateOrgMsp() error {
+	basePath := cu.GetOrgMspDir()
+
+
+	// cacerts/ca-cert.pem
+	if err := os.MkdirAll(filepath.Join(basePath, "cacerts"), os.ModePerm); err != nil {
+		return err
+	}
+	if _, err := copy(filepath.Join(basePath, "..", "ca", "ca-cert.pem"), filepath.Join(basePath, "cacerts", "ca-cert.pem")); err != nil {
+		return err
+	}
+
+	// tlscacerts/tlsca-cert.pem
+	if err := os.MkdirAll(filepath.Join(basePath, "tlscacerts"), os.ModePerm); err != nil {
+		return err
+	}
+	if _, err := copy(filepath.Join(basePath, "..", "ca", "ca-cert.pem"), filepath.Join(basePath, "tlscacerts", "tlsca-cert.pem")); err != nil {
+		return err
+	}
+
+	// config.yaml
+	f3, err := os.Create(filepath.Join(basePath, "config.yaml"))
+	if err != nil {
+		return err
+	}
+	ouconfig := `NodeOUs:
+	Enable: true
+	ClientOUIdentifier:
+	  Certificate: cacerts/ca-cert.pem
+	  OrganizationalUnitIdentifier: client
+	PeerOUIdentifier:
+	  Certificate: cacerts/ca-cert.pem
+	  OrganizationalUnitIdentifier: peer
+	AdminOUIdentifier:
+	  Certificate: cacerts/ca-cert.pem
+	  OrganizationalUnitIdentifier: admin
+	OrdererOUIdentifier:
+	  Certificate: cacerts/ca-cert.pem
+	  OrganizationalUnitIdentifier: orderer`
+	_, _ = f3.Write([]byte(ouconfig))
+
+	return nil
+}
+
 func (cu *CaUser) GetCACert() string {
-	return "cacert"
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetOrgMspDir(), "cacerts", "ca-cert.pem"))
+	if err != nil {
+		global.Logger.Error("fail to read ca-cert.pem", zap.Error(err))
+	}
+	return string(content)
 }
 
 func (cu *CaUser) GetCert() string {
-	return "cert"
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", "cert.pem"))
+	if err != nil {
+		global.Logger.Error("fail to read cert.pem", zap.Error(err))
+	}
+	return string(content)
 }
 
 func (cu *CaUser) GetPrivateKey() string {
-	return "privkey"
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "keystore", "priv_sk"))
+	if err != nil {
+		global.Logger.Error("fail to read cert.pem", zap.Error(err))
+	}
+	return string(content)
 }
 
 func (cu *CaUser) Register(mspClient *msp.Client) error {

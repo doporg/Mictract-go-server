@@ -1,7 +1,10 @@
 package test
 
 import (
+	"fmt"
+	"go.uber.org/zap"
 	"mictract/config"
+	"mictract/global"
 	"mictract/model"
 	"testing"
 
@@ -141,5 +144,29 @@ func TestGetBasePath(t *testing.T) {
 	for _, tc := range tests {
 		basePath := tc.CaUser.GetBasePath()
 		assert.Equal(t, tc.BasePath, basePath)
+	}
+}
+
+func TestStroeOrgMsp(t *testing.T) {
+	// 一orderer，一组织网络
+	causers := []model.CaUser {
+		model.CaUser{
+			OrganizationID: -1,
+			NetworkID: 1,
+		},
+		model.CaUser{
+			OrganizationID: 1,
+			NetworkID: 1,
+		},
+	}
+
+	for _, causer := range causers {
+		err := causer.GenerateOrgMsp()
+		if err != nil {
+			global.Logger.Error("fail to generate orgMsp :", zap.Error(err))
+		} else {
+			fmt.Println(causer.GetCACert())
+		}
+		//fmt.Println(causer.GetCACert())
 	}
 }
