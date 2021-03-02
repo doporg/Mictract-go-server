@@ -113,3 +113,64 @@ func TestGetCAInfo(t *testing.T) {
 	}
 	fmt.Println(string(cainfo.CAChain))
 }
+
+func TestRegiesterOrderer(t *testing.T) {
+	username := "orderer1"
+	password := "ordererpw"
+	usertype := "orderer"
+	orgName := "ordererorg"
+	caid := "ca.org1.net1.com"
+
+	sdk, err := testNet.GetSDK()
+	if err != nil {
+		global.Logger.Error("fail to get sdk", zap.Error(err))
+	}
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(caid), mspclient.WithOrg(orgName))
+	if err != nil {
+		global.Logger.Error("fail to get mspClient", zap.Error(err))
+	}
+
+	request := &mspclient.RegistrationRequest{
+		Name:   username,
+		Type:   usertype,
+		Secret: password,
+	}
+
+	_, err = mspClient.Register(request)
+	if err != nil {
+		global.Logger.Error("fail to register ", zap.Error(err))
+	}
+}
+
+func TestEnrollOrderer(t *testing.T) {
+	username := "orderer1"
+	password := "ordererpw"
+	sdk, err := testNet.GetSDK()
+	if err != nil {
+		global.Logger.Error("fail to get sdk", zap.Error(err))
+	}
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance("ca.org1.net1.com"), mspclient.WithOrg("org1"))
+	if err != nil {
+		global.Logger.Error("fail to get mspClient", zap.Error(err))
+	}
+
+	mspClient.Enroll(username, mspclient.WithSecret(password))
+
+	resp, err := mspClient.GetSigningIdentity(username)
+	if err != nil {
+		global.Logger.Error("fail to get SignID ", zap.Error(err))
+	}
+
+	cert := resp.EnrollmentCertificate()
+	privkey, err := resp.PrivateKey().Bytes()
+	if err != nil {
+		global.Logger.Error("fail to get priv", zap.Error(err))
+	}
+
+	fmt.Println("cert:")
+	fmt.Println(string(cert))
+	fmt.Println("priv:")
+	fmt.Println(string(privkey))
+}

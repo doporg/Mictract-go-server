@@ -109,7 +109,7 @@ func (n *Network) Deploy() (err error) {
 
 	// TODO: make it sync
 	// wait for pulling images when first deploy
-	time.Sleep(5 * time.Second)
+	time.Sleep(60 * time.Second)
 
 	// call CaUser.GenerateOrgMsp for GetSDK
 	causers := []CaUser {

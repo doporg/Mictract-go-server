@@ -183,7 +183,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// certificateAuthorities
 	sdkconfig.CertificateAuthorities["ca."+n.Name+".com"] = &SDKCAs{
-		URL: "ca-" + n.Name,
+		URL: "https://ca-" + n.Name + ":7054",
 		TLSCACerts: struct {
 			Pem []string "yaml:\"pem\""
 		}{Pem: []string{NewCaUserFromDomainName("orderer1." + n.Name + ".com").GetCACert()}},
