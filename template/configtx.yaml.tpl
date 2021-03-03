@@ -15,7 +15,7 @@ Organizations:
                 Rule: "OR('OrdererMSP.admin')"
 
         OrdererEndpoints:
-            - orderer1.net{{.ID}}.com:7050
+            - orderer1-net{{.ID}}:7050
 
     - &Org1
         Name: Org1
@@ -36,7 +36,7 @@ Organizations:
                 Rule: "OR('Org1MSP.peer')"
 
         AnchorPeers:
-            - Host: peer1.org1.net{{.ID}}.com
+            - Host: peer1-org1-net{{.ID}}
               Port: 7051
 
 Capabilities:
@@ -72,10 +72,10 @@ Application: &ApplicationDefaults
 Orderer: &OrdererDefaults
     OrdererType: {{.Consensus}}
     Addresses:
-        - orderer1.net{{.ID}}.com:7050
+        - orderer1-net{{.ID}}:7050
     EtcdRaft:
         Consenters:
-        - Host: orderer1.net{{.ID}}.com
+        - Host: orderer1-net{{.ID}}
           Port: 7050
           ClientTLSCert: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/orderers/orderer1.net{{.ID}}.com/tls/server.crt
           ServerTLSCert: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/orderers/orderer1.net{{.ID}}.com/tls/server.crt

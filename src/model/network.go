@@ -3,7 +3,6 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	mConfig "mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
@@ -11,6 +10,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"text/template"
 	"time"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
