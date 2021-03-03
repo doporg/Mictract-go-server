@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"go.uber.org/zap"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -98,6 +99,11 @@ func execCommand(m K8sModel, cmd ...string) (string, string, error) {
 		Stdout:            &stdout,
 		Stderr:            &stderr,
 	}); err != nil {
+		global.Logger.Error("Error occurred when exec command",
+			zap.String("stdout", stdout.String()),
+			zap.String("stderr", stderr.String()),
+		)
+
 		return stdout.String(), stderr.String(), err
 	}
 

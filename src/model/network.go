@@ -90,7 +90,6 @@ func DeleteNetworkByID(id int) error {
 	return nil
 }
 
-// TODO: need unit test
 // Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
 //	and then join the rest of peers and orderers.
 // The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
@@ -113,11 +112,11 @@ func (n *Network) Deploy() (err error) {
 
 	// call CaUser.GenerateOrgMsp for GetSDK
 	causers := []CaUser {
-		CaUser {
+		{
 			OrganizationID: -1,
 			NetworkID: n.ID,
 		},
-		CaUser {
+		{
 			OrganizationID: 1,
 			NetworkID: n.ID,
 		},
@@ -140,18 +139,6 @@ func (n *Network) Deploy() (err error) {
 		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("Org1")); err != nil {
 			return err
 		}
-/*
-		enrollOptions := []msp.EnrollmentOption{
-			msp.WithSecret("adminpw"),
-		}
-
-		if n.TlsEnabled {
-			enrollOptions = append(enrollOptions, msp.WithProfile("tls"))
-		}
-
-		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
-			return err
-		}*/
 
 		// register users of this organization
 		users := []*CaUser{
@@ -181,19 +168,7 @@ func (n *Network) Deploy() (err error) {
 		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("OrdererOrg")); err != nil {
 			return err
 		}
-/*
-		enrollOptions := []msp.EnrollmentOption{
-			msp.WithSecret("adminpw"),
-		}
 
-		if n.TlsEnabled {
-			enrollOptions = append(enrollOptions, msp.WithProfile("tls"))
-		}
-
-		if err = mspClient.Enroll("admin", enrollOptions...); err != nil {
-			return err
-		}
-*/
 		// register users of this organization
 		users := []*CaUser{
 			NewUserCaUser(1, -1, n.ID, "user1pw"),

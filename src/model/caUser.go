@@ -378,19 +378,19 @@ func (cu *CaUser) GenerateOrgMsp() error {
 		return err
 	}
 	ouconfig := `NodeOUs:
-	Enable: true
-	ClientOUIdentifier:
-	  Certificate: cacerts/ca-cert.pem
-	  OrganizationalUnitIdentifier: client
-	PeerOUIdentifier:
-	  Certificate: cacerts/ca-cert.pem
-	  OrganizationalUnitIdentifier: peer
-	AdminOUIdentifier:
-	  Certificate: cacerts/ca-cert.pem
-	  OrganizationalUnitIdentifier: admin
-	OrdererOUIdentifier:
-	  Certificate: cacerts/ca-cert.pem
-	  OrganizationalUnitIdentifier: orderer`
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca-cert.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca-cert.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca-cert.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca-cert.pem
+    OrganizationalUnitIdentifier: orderer`
 	_, _ = f3.Write([]byte(ouconfig))
 
 	return nil
