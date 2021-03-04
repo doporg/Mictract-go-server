@@ -290,19 +290,19 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
 		return err
 	}
 	ouconfig := `NodeOUs:
-	Enable: true
-	ClientOUIdentifier:
-	  Certificate: cacerts/<filename>
-	  OrganizationalUnitIdentifier: client
-	PeerOUIdentifier:
-	  Certificate: cacerts/<filename>
-	  OrganizationalUnitIdentifier: peer
-	AdminOUIdentifier:
-	  Certificate: cacerts/<filename>
-	  OrganizationalUnitIdentifier: admin
-	OrdererOUIdentifier:
-	  Certificate: cacerts/<filename>
-	  OrganizationalUnitIdentifier: orderer`
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/<filename>
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/<filename>
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/<filename>
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/<filename>
+    OrganizationalUnitIdentifier: orderer`
 	_, _ = f5.Write([]byte(strings.Replace(ouconfig, "<filename>", "ca."+certNameSuffix, -1)))
 
 	return nil

@@ -102,7 +102,7 @@ func (o *Orderer) CreateConfigMap() {
 
 // Connect to K8S to create the deployment.
 func (o *Orderer) CreateDeployment() {
-	netPath := filepath.Join("network", "net" + strconv.Itoa(o.NetworkID))
+	netPath := filepath.Join("networks", "net" + strconv.Itoa(o.NetworkID))
 	subPath := o.GetSubPath()
 	name := o.GetName()
 
@@ -156,12 +156,12 @@ func (o *Orderer) CreateDeployment() {
 								},
 								{
 									Name:             "msp",
-									MountPath:        "/etc/hyperledger/orderer/msp",
+									MountPath:        "/var/hyperledger/orderer/msp",
 									SubPath: filepath.Join(subPath, "msp"),
 								},
 								{
 									Name:             "tls",
-									MountPath:        "/etc/hyperledger/orderer/tls",
+									MountPath:        "/var/hyperledger/orderer/tls",
 									SubPath: filepath.Join(subPath, "tls"),
 								},
 								{
