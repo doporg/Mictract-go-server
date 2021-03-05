@@ -105,6 +105,7 @@ func TestRenderConfigtx(t *testing.T) {
 
 	assert.Equal(t, true, err == nil)
 }
+
 func TestGetSDK(t *testing.T) {
 	// testNet.GetSDK()
 
@@ -139,7 +140,7 @@ func TestGetCAInfo(t *testing.T) {
 	fmt.Println(string(cainfo.CAChain))
 }
 
-func TestRegiesterOrderer(t *testing.T) {
+func TestRegisterOrderer(t *testing.T) {
 	username := "orderer1"
 	password := "ordererpw"
 	usertype := "orderer"
@@ -181,7 +182,7 @@ func TestEnrollOrderer(t *testing.T) {
 		global.Logger.Error("fail to get mspClient", zap.Error(err))
 	}
 
-	mspClient.Enroll(username, mspclient.WithSecret(password))
+	_ = mspClient.Enroll(username, mspclient.WithSecret(password))
 
 	resp, err := mspClient.GetSigningIdentity(username)
 	if err != nil {

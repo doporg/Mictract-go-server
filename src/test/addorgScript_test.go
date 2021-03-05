@@ -15,6 +15,7 @@ func TestABC(t *testing.T) {
 	global.Logger.Error("fuck you")
 	fmt.Println("abc")
 }
+
 func TestAddOrg(t *testing.T) {
 	channelID := "mychannel"
 	mspID := "Org3MSP"

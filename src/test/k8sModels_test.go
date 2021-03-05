@@ -105,6 +105,7 @@ func TestExecCommand(t *testing.T) {
 func TestCreateOrdererCA(t *testing.T) {
 	ordererCA.Create()
 }
+
 func TestDeleteOrdererCA(t *testing.T) {
 	ordererCA.Delete()
 }
