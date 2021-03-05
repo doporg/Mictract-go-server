@@ -66,7 +66,6 @@ func (p *Peer) GetPod() (*apiv1.Pod, error) {
 // Connect to K8S to create the configMap.
 func (p *Peer) CreateConfigMap() {
 	name := p.GetName()
-	// peerId := p.GetDomain()
 	peerId := p.GetName()
 	// Note: local MSP id should be like "Org1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
 	localMSPId := fmt.Sprintf("Org%dMSP", p.OrganizationID)
