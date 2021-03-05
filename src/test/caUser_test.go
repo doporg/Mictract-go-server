@@ -26,7 +26,8 @@ func TestSaveCaUser(t *testing.T) {
 
 	for _, tc := range tests {
 		caUser := model.NewCaUserFromDomainName(tc.Username)
-		_ = caUser.BuildDir([]byte("CA cert test"), []byte("cert test"), []byte("priv key test"))
+		_ = caUser.BuildDir([]byte("CA cert test"), []byte("cert test"), []byte("priv key test"), true)
+		_ = caUser.BuildDir([]byte("CA cert test"), []byte("cert test"), []byte("priv key test"), false)
 	}
 }
 
