@@ -3,17 +3,24 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
+	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	mConfig "mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"mictract/model/request"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"text/template"
 	"time"
 
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
+	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
+
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
@@ -134,9 +141,9 @@ func (n *Network) Deploy() (err error) {
 
 	// create an organization
 	{
-		var mspClient *msp.Client
+		var mspClient *mspclient.Client
 		caUrl := fmt.Sprintf("ca.org1.net%d.com", n.ID)
-		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("Org1")); err != nil {
+		if mspClient, err = mspclient.New(sdk.Context(), mspclient.WithCAInstance(caUrl), mspclient.WithOrg("Org1")); err != nil {
 			return err
 		}
 
@@ -155,6 +162,11 @@ func (n *Network) Deploy() (err error) {
 
 		// enroll to build msp and tls directories
 		for _, u := range users {
+			// msp
+			if err = u.Enroll(mspClient, false); err != nil {
+				return err
+			}
+			// tls
 			if err = u.Enroll(mspClient, n.TlsEnabled); err != nil {
 				return err
 			}
@@ -163,9 +175,9 @@ func (n *Network) Deploy() (err error) {
 
 	// create an orderer organization
 	{
-		var mspClient *msp.Client
+		var mspClient *mspclient.Client
 		caUrl := fmt.Sprintf("ca.net%d.com", n.ID)
-		if mspClient, err = msp.New(sdk.Context(), msp.WithCAInstance(caUrl), msp.WithOrg("OrdererOrg")); err != nil {
+		if mspClient, err = mspclient.New(sdk.Context(), mspclient.WithCAInstance(caUrl), mspclient.WithOrg("OrdererOrg")); err != nil {
 			return err
 		}
 
@@ -184,6 +196,11 @@ func (n *Network) Deploy() (err error) {
 
 		// enroll to build msp and tls directories
 		for _, u := range users {
+			// msp
+			if err = u.Enroll(mspClient, false); err != nil {
+				return err
+			}
+			// tls
 			if err = u.Enroll(mspClient, n.TlsEnabled); err != nil {
 				return err
 			}
@@ -257,6 +274,7 @@ func (n *Network) UpdateSDK() error {
 	if err != nil {
 		return err
 	}
+	global.Logger.Info(string(sdkconfig))
 	sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
 	if err != nil {
 		return err
@@ -272,6 +290,70 @@ func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
 		}
 	}
 	return global.SDKs[n.Name], nil
+}
+
+func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
+	n := Network{Name: fmt.Sprintf("net%d", id)}
+	//return n.GetSDK()
+	sdk, ok := global.SDKs[n.Name]
+	if !ok {
+		return nil, errors.New("please update SDK")
+	}
+	return sdk, nil
+}
+
+
+
+func (n *Network)GetAllPeerAdminSigningIdentities() ([]msp.SigningIdentity, error) {
+	signs := []msp.SigningIdentity{}
+	for _, org := range n.Organizations {
+		username := fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, n.ID)
+		password := "admin1pw"
+
+		mspClient, err := org.NewMspClient()
+		if err != nil {
+			global.Logger.Error(fmt.Sprintf("fail to get %s mspClient", org.Name), zap.Error(err))
+		}
+
+		if err := mspClient.Enroll(username, mspclient.WithSecret(password)); err != nil {
+			global.Logger.Error("fail to enroll user " + username, zap.Error(err))
+		}
+
+		sign, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, n.ID))
+		if err != nil {
+			global.Logger.Error(fmt.Sprintf("fail to get org%d AdminSigningIdentity", org.ID))
+		}
+		signs = append(signs, sign)
+	}
+
+	return signs, nil
+}
+
+
+func (n *Network)CreateChannel(channelName, ordererURL string) error {
+	sdk, err := n.GetSDK()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get sdk ")
+	}
+	channelConfigTxPath := filepath.Join(mConfig.LOCAL_BASE_PATH, fmt.Sprintf("net%d", n.ID), channelName + ".tx")
+
+	adminIdentitys, err := n.GetAllPeerAdminSigningIdentities()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get all SigningIdentities")
+	}
+	req := resmgmt.SaveChannelRequest{
+		ChannelID: channelName,
+		ChannelConfigPath: channelConfigTxPath,
+		SigningIdentities: adminIdentitys,
+	}
+
+	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@org1.net%d.com", n.ID)), fabsdk.WithOrg("org1"))
+	rc, err := resmgmt.New(rcp)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get rc ")
+	}
+	_, err = rc.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
+	return err
 }
 
 // 给network中的自定义字段使用

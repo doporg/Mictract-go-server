@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/base64"
+
 	"mictract/config"
 	"mictract/global"
 	"os"
@@ -20,7 +21,7 @@ import (
 
 type Channel struct {
 	Name          string        `json:"name"`
-	NetworkName   string        `json:"networkname"`
+	NetworkID   int        `json:"networkID"`
 	Organizations Organizations `json:"organizations"`
 	Orderers      Orders        `json:"orderers"`
 }
@@ -37,9 +38,10 @@ func (channels *Channels) Value() (driver.Value, error) {
 }
 
 func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, error) {
-	sdk, ok := global.SDKs[c.NetworkName]
-	if !ok {
-		return nil, errors.New("fail to get sdk. please update global.SDKs.")
+	//sdk, ok := global.SDKs[c.NetworkName]
+	sdk, err := GetSDKByNetWorkID(c.NetworkID)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get sdk ")
 	}
 	ledgerClient, err := ledger.New(sdk.ChannelContext(c.Name, fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
 	if err != nil {
@@ -49,9 +51,9 @@ func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, err
 }
 
 func (c *Channel) NewResmgmtClient(username, orgname string) (*resmgmt.Client, error) {
-	sdk, ok := global.SDKs[c.NetworkName]
-	if !ok {
-		return nil, errors.New("fail to get sdk. please update global.SDKs.")
+	sdk, err := GetSDKByNetWorkID(c.NetworkID)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get sdk ")
 	}
 	resmgmtClient, err := resmgmt.New(sdk.Context(fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
 	if err != nil {
@@ -219,10 +221,11 @@ func (c *Channel)AddOrderers(org *Organization) error {
 	// generate ord1.json
 	st := `["`
 	for _, orderer := range org.Peers {
-		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(orderer.GetTLSCert())) +
+		tlscert := NewCaUserFromDomainName(orderer.Name).GetTLSCert(true)
+		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) +
 			`","host":"` + orderer.Name +
 			`","port":7050,` +
-			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(orderer.GetTLSCert())) + `"},`
+			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) + `"},`
 	}
 	st += "]"
 	f1, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "ord1.json"))

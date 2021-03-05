@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"mictract/global"
 	"mictract/model"
+	"mictract/model/kubernetes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -70,6 +71,30 @@ func TestDeployNetwork(t *testing.T) {
 	}
 
 	assert.Equal(t, true, err == nil)
+}
+
+func TestDeleteBasicNetwork(t *testing.T) {
+	tools := kubernetes.Tools{}
+	models := []kubernetes.K8sModel{
+		&tools,
+		kubernetes.NewPeerCA(testNet.ID, 1),
+		kubernetes.NewOrdererCA(testNet.ID),
+	}
+
+	for _, m := range models {
+		m.Delete()
+	}
+
+	models = []kubernetes.K8sModel{
+		kubernetes.NewOrderer(testNet.ID, 1),
+		kubernetes.NewPeer(testNet.ID, 1, 1),
+	}
+
+	for _, m := range models {
+		m.Delete()
+	}
+
+
 }
 
 func TestRenderConfigtx(t *testing.T) {

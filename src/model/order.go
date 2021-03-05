@@ -24,5 +24,5 @@ func (orderers *Orders) Value() (driver.Value, error) {
 
 func (orderer *Order)getURL() string {
 	causer := NewCaUserFromDomainName(orderer.Name)
-	return fmt.Sprintf("grpcs://orderer%d-org%d-net%d:7050", causer.UserID, causer.OrganizationID, causer.NetworkID)
+	return fmt.Sprintf("grpcs://orderer%d-net%d:7050", causer.UserID, causer.NetworkID)
 }

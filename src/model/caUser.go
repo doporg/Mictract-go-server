@@ -138,6 +138,20 @@ func (cu *CaUser) IsInOrdererOrg() bool {
 	return cu.OrganizationID < 0
 }
 
+// jus for peer and orderer
+func (cu *CaUser) GetURL() string {
+	url := ""
+	switch cu.Type {
+	case "user", "admin":
+		url = cu.GetUsername()
+	case "peer":
+		url = fmt.Sprintf("peer%d-org%d-net%d", cu.UserID, cu.OrganizationID, cu.NetworkID)
+	case "orderer":
+		url = fmt.Sprintf("orderer%d-net%d", cu.UserID, cu.NetworkID)
+	}
+	return url
+}
+
 func (cu *CaUser) GetUsername() (username string) {
 	switch cu.Type {
 	case "user":
@@ -196,100 +210,105 @@ func (cu *CaUser) GetBasePath() string {
 	return basePath
 }
 
-func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
-	// 此段代码生成的prefixPath目录下应该只需包括msp和tls两个文件夹
-	// Build TLS directory by the given CaUser.
-	prefixPath := filepath.Join(cu.GetBasePath(), "tls")
-	err := os.MkdirAll(prefixPath, os.ModePerm)
-	if err != nil {
-		return errors.WithMessage(err, prefixPath+"创建错误")
-	}
-
-	fuckName := ""
-	if cu.Type == "peer" || cu.Type == "orderer" {
-		fuckName = "server"
-	} else {
-		fuckName = "client"
-	}
-
-	// 写入三个文件 server.crt server.key ca.crt 或者 client.crt client.key ca.crt
-	for _, filename := range []string{filepath.Join(prefixPath, fuckName+".crt"),
-		filepath.Join(prefixPath, fuckName+".key"),
-		filepath.Join(prefixPath, "ca.crt")} {
-		f, err := os.Create(filename)
+func (cu *CaUser) BuildDir(cacert, cert, privkey []byte, isTLS bool) error {
+	if isTLS {
+		// 此段代码生成的prefixPath目录下应该只需包括msp和tls两个文件夹
+		// Build TLS directory by the given CaUser.
+		prefixPath := filepath.Join(cu.GetBasePath(), "tls")
+		err := os.MkdirAll(prefixPath, os.ModePerm)
 		if err != nil {
-			return err
+			return errors.WithMessage(err, prefixPath+"创建错误")
 		}
-		defer f.Close()
 
-		if strings.HasSuffix(filename, "key") {
-			_, _ = f.Write(privkey)
-		} else if strings.HasSuffix(filename, "ca.crt") {
-			_, _ = f.Write(cacert)
+		fuckName := ""
+		if cu.Type == "peer" || cu.Type == "orderer" {
+			fuckName = "server"
 		} else {
-			_, _ = f.Write(cert)
+			fuckName = "client"
 		}
-	}
 
-	// Build MSP directory by the given CaUser.
-	prefixPath = filepath.Join(cu.GetBasePath(), "msp")
-	err = os.MkdirAll(prefixPath, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	/*
-		msp 下有四个文件夹 cacerts tlscacerts keystore signcerts
-		tlscacerts 和 cacerts文件夹中的文件夹一样，我们规定一个组织只
-		用一个ca
-	*/
-	for _, dir := range []string{
-		filepath.Join(prefixPath, "cacerts"),
-		filepath.Join(prefixPath, "tlscacerts"),
-		filepath.Join(prefixPath, "keystore"),
-		filepath.Join(prefixPath, "signcerts"),
-	} {
-		err := os.MkdirAll(dir, os.ModePerm)
+		// 写入三个文件 server.crt server.key ca.crt 或者 client.crt client.key ca.crt
+		for _, filename := range []string{filepath.Join(prefixPath, fuckName+".crt"),
+			filepath.Join(prefixPath, fuckName+".key"),
+			filepath.Join(prefixPath, "ca.crt")} {
+			f, err := os.Create(filename)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			if strings.HasSuffix(filename, "key") {
+				_, _ = f.Write(privkey)
+			} else if strings.HasSuffix(filename, "ca.crt") {
+				_, _ = f.Write(cacert)
+			} else {
+				_, _ = f.Write(cert)
+			}
+		}
+	} else {
+
+		// Build MSP directory by the given CaUser.
+		prefixPath := filepath.Join(cu.GetBasePath(), "msp")
+		err := os.MkdirAll(prefixPath, os.ModePerm)
 		if err != nil {
 			return err
 		}
-	}
+		/*
+			msp 下有四个文件夹 cacerts tlscacerts keystore signcerts
+			tlscacerts 和 cacerts文件夹中的文件夹一样，我们规定一个组织只
+			用一个ca
+		*/
+		for _, dir := range []string{
+			filepath.Join(prefixPath, "cacerts"),
+			filepath.Join(prefixPath, "tlscacerts"),
+			filepath.Join(prefixPath, "keystore"),
+			filepath.Join(prefixPath, "signcerts"),
+		} {
+			err := os.MkdirAll(dir, os.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
 
-	orgUrl := fmt.Sprintf("org%d.net%d.com", cu.OrganizationID, cu.NetworkID)
-	certNameSuffix := orgUrl + "-cert.pem"
+		orgUrl := fmt.Sprintf("org%d.net%d.com", cu.OrganizationID, cu.NetworkID)
+		if cu.IsInOrdererOrg() {
+			orgUrl = fmt.Sprintf("net%d.com", cu.NetworkID)
+		}
+		certNameSuffix := orgUrl + "-cert.pem"
 
-	f1, err := os.Create(filepath.Join(prefixPath, "cacerts", "ca."+certNameSuffix))
-	if err != nil {
-		return err
-	}
-	defer f1.Close()
-	_, _ = f1.Write(cacert)
+		f1, err := os.Create(filepath.Join(prefixPath, "cacerts", "ca."+certNameSuffix))
+		if err != nil {
+			return err
+		}
+		defer f1.Close()
+		_, _ = f1.Write(cacert)
 
-	f2, err := os.Create(filepath.Join(prefixPath, "tlscacerts", "tlsca."+certNameSuffix))
-	if err != nil {
-		return err
-	}
-	defer f2.Close()
-	_, _ = f2.Write(cacert)
+		f2, err := os.Create(filepath.Join(prefixPath, "tlscacerts", "tlsca."+certNameSuffix))
+		if err != nil {
+			return err
+		}
+		defer f2.Close()
+		_, _ = f2.Write(cacert)
 
-	f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.com"))
-	if err != nil {
-		return err
-	}
-	defer f3.Close()
-	_, _ = f3.Write(cert)
+		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.com"))
+		if err != nil {
+			return err
+		}
+		defer f3.Close()
+		_, _ = f3.Write(cert)
 
-	f4, err := os.Create(filepath.Join(prefixPath, "keystore", "priv_sk"))
-	if err != nil {
-		return err
-	}
-	defer f4.Close()
-	_, _ = f4.Write(privkey)
+		f4, err := os.Create(filepath.Join(prefixPath, "keystore", "priv_sk"))
+		if err != nil {
+			return err
+		}
+		defer f4.Close()
+		_, _ = f4.Write(privkey)
 
-	f5, err := os.Create(filepath.Join(prefixPath, "config.yaml"))
-	if err != nil {
-		return err
-	}
-	ouconfig := `NodeOUs:
+		f5, err := os.Create(filepath.Join(prefixPath, "config.yaml"))
+		if err != nil {
+			return err
+		}
+		ouconfig := `NodeOUs:
   Enable: true
   ClientOUIdentifier:
     Certificate: cacerts/<filename>
@@ -303,8 +322,8 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte) error {
   OrdererOUIdentifier:
     Certificate: cacerts/<filename>
     OrganizationalUnitIdentifier: orderer`
-	_, _ = f5.Write([]byte(strings.Replace(ouconfig, "<filename>", "ca."+certNameSuffix, -1)))
-
+		_, _ = f5.Write([]byte(strings.Replace(ouconfig, "<filename>", "ca."+certNameSuffix, -1)))
+	}
 	return nil
 }
 
@@ -412,6 +431,18 @@ func (cu *CaUser) GetCert() string {
 	return string(content)
 }
 
+func (cu *CaUser) GetTLSCert(isServerTLSCert bool) string {
+	filename := "server.crt"
+	if isServerTLSCert {
+		filename = "client.crt"
+	}
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "tls", filename))
+	if err != nil {
+		global.Logger.Error("fail to read cert.pem", zap.Error(err))
+	}
+	return string(content)
+}
+
 func (cu *CaUser) GetPrivateKey() string {
 	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "keystore", "priv_sk"))
 	if err != nil {
@@ -440,11 +471,16 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 	var err error
 	username := cu.GetUsername()
+	hosts := []string{cu.GetURL()}
 
 	if isTLS {
-		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithProfile("tls"))
+		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithProfile("tls"), msp.WithCSR(&msp.CSRInfo{
+			Hosts: hosts,
+		}))
 	} else {
-		err = mspClient.Enroll(username, msp.WithSecret(cu.Password))
+		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithCSR(&msp.CSRInfo{
+			Hosts: hosts,
+		}))
 	}
 
 	if err != nil {
@@ -467,7 +503,7 @@ func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 		return errors.WithMessage(err, "fail to get cacert")
 	}
 
-	err = cu.BuildDir(cainfo.CAChain, cert, privkey)
+	err = cu.BuildDir(cainfo.CAChain, cert, privkey, isTLS)
 	if err != nil {
 		return errors.WithMessage(err, "fail to store info")
 	}

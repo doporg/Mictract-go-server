@@ -2,7 +2,7 @@ package model
 
 import (
 	"database/sql/driver"
-	"mictract/global"
+	"fmt"
 	"strings"
 
 	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
@@ -10,12 +10,14 @@ import (
 )
 
 type Organization struct {
+	ID int `json:"id"`
 	Name        string `json:"name"`
 	Peers       Peers  `json:"peers"`
 	MSPID       string `json:"mspid"`
 	MSPPath     string `json:"msppath"`
-	CAID        string `json:"caid"`
-	NetworkName string `json:"networkname"`
+	NetworkID	int	`json:"networkid"`
+	//CAID        string `json:"caid"`
+	//NetworkName string `json:"networkname"`
 }
 
 type Organizations []Organization
@@ -60,9 +62,15 @@ Organizations:
 }
 
 func (org *Organization) NewMspClient() (*mspclient.Client, error) {
-	sdk, ok := global.SDKs[org.NetworkName]
-	if !ok {
-		return nil, errors.New("fail to get sdk. please update global.SDKs.")
+	sdk, err := GetSDKByNetWorkID(org.NetworkID)
+	if err != nil {
+		return nil, errors.New("fail to get sdk")
 	}
-	return mspclient.New(sdk.Context(), mspclient.WithCAInstance(org.CAID), mspclient.WithOrg(org.Name))
+	caID := ""
+	if org.ID == -1 {
+		caID = fmt.Sprintf("ca.net%d.com", org.NetworkID)
+	} else {
+		caID = fmt.Sprintf("ca.org%d.net%d.com", org.ID, org.NetworkID)
+	}
+	return mspclient.New(sdk.Context(), mspclient.WithCAInstance(caID), mspclient.WithOrg(org.Name))
 }

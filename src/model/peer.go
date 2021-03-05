@@ -3,6 +3,10 @@ package model
 import (
 	"database/sql/driver"
 	"fmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
+	"github.com/pkg/errors"
 )
 
 type Peer struct {
@@ -28,24 +32,18 @@ func (peer *Peer) GetURL() string {
 	// return "grpcs://" + strings.ReplaceAll(peer.Name, ".", "-") + ":7051"
 }
 
-func (peer *Peer) GetTLSCert() string {
-	// TODO
-	return `
------BEGIN CERTIFICATE-----
-MIICdzCCAh2gAwIBAgIQTtcDS7cbBR3ufL+2KllUljAKBggqhkjOPQQDAjBsMQsw
-CQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNU2FuIEZy
-YW5jaXNjbzEUMBIGA1UEChMLZXhhbXBsZS5jb20xGjAYBgNVBAMTEXRsc2NhLmV4
-YW1wbGUuY29tMB4XDTIxMDIyMjExMTUwMFoXDTMxMDIyMDExMTUwMFowWDELMAkG
-A1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDVNhbiBGcmFu
-Y2lzY28xHDAaBgNVBAMTE29yZGVyZXIuZXhhbXBsZS5jb20wWTATBgcqhkjOPQIB
-BggqhkjOPQMBBwNCAASFRrDq1OeiBerm3MVU8I/w4r71z7oqGDki5g6IFOe0NHmG
-SnonawNY4UGW4qCInetTkueQuuVIDEUWecsf7r7Ao4G0MIGxMA4GA1UdDwEB/wQE
-AwIFoDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDAYDVR0TAQH/BAIw
-ADArBgNVHSMEJDAigCB7WavWZFEVZOvd+x/DlXyvozsyuA+wlmzR3dETVlPCCzBF
-BgNVHREEPjA8ghNvcmRlcmVyLmV4YW1wbGUuY29tggdvcmRlcmVyghNvcmRlcmVy
-LmV4YW1wbGUuY29tggdvcmRlcmVyMAoGCCqGSM49BAMCA0gAMEUCIQDyTpnIAk+1
-oIDMPwWKoo0ntA8ta6JoSs7U0hTn2E7hfAIgO8kAvJnnEPAiTFWdVxCPj5IDPfDV
-cQpADaTqJG8cnXU=
------END CERTIFICATE-----
-`
+func (peer *Peer)JoinChannel(channelID, ordererURL string) error {
+	user := NewCaUserFromDomainName(peer.Name)
+	sdk, err:= GetSDKByNetWorkID(user.NetworkID)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get sdk ")
+	}
+
+	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin@org%d.net%d.com", user.OrganizationID, user.NetworkID)), fabsdk.WithOrg(fmt.Sprintf("org%d", user.OrganizationID)))
+	rc, err := resmgmt.New(rcp)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get rc ")
+	}
+
+	return rc.JoinChannel(channelID, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
 }
