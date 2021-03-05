@@ -86,15 +86,17 @@ func (p *Peer) CreateConfigMap() {
 			"CORE_PEER_TLS_KEY_FILE":"/etc/hyperledger/fabric/tls/server.key",
 			"CORE_PEER_TLS_ROOTCERT_FILE":"/etc/hyperledger/fabric/tls/ca.crt",
 			"CORE_PEER_ID":peerId,
-			"CORE_PEER_ADDRESS":peerId + ":7051",
+			// here should use `localhost`
+			"CORE_PEER_ADDRESS":"localhost:7051",
 			"CORE_PEER_LISTENADDRESS":"0.0.0.0:7051",
 
-			// The address to connect chaincode
-			"CORE_PEER_CHAINCODEADDRESS":peerId + ":7052",
+			// The address to connect chaincode, also should use `localhost`
+			"CORE_PEER_CHAINCODEADDRESS":"localhost:7052",
 			"CORE_PEER_CHAINCODELISTENADDRESS":"0.0.0.0:7052",
 
-			"CORE_PEER_GOSSIP_BOOTSTRAP":peerId + ":7051",
-			"CORE_PEER_GOSSIP_EXTERNALENDPOINT":peerId + ":7051",
+			// The address for gossip. Should it use `localhost`?
+			"CORE_PEER_GOSSIP_BOOTSTRAP":"localhost:7051",
+			"CORE_PEER_GOSSIP_EXTERNALENDPOINT":"localhost:7051",
 			"CORE_PEER_LOCALMSPID": localMSPId,
 		},
 	}
@@ -155,6 +157,11 @@ func (p *Peer) CreateDeployment() {
 									Name:          "peer",
 									Protocol:      apiv1.ProtocolTCP,
 									ContainerPort: 7051,
+								},
+								{
+									Name:          "peer-cc",
+									Protocol:      apiv1.ProtocolTCP,
+									ContainerPort: 7052,
 								},
 							},
 							VolumeMounts: []apiv1.VolumeMount{
@@ -260,6 +267,14 @@ func (p *Peer) CreateService() {
 					TargetPort: intstr.IntOrString{
 						Type:   intstr.String,
 						StrVal: "peer",
+					},
+				},
+				{
+					Name: "peer-cc",
+					Port: 7052,
+					TargetPort: intstr.IntOrString{
+						Type:   intstr.String,
+						StrVal: "peer-cc",
 					},
 				},
 			},

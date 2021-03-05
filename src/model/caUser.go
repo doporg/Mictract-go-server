@@ -471,7 +471,7 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 	var err error
 	username := cu.GetUsername()
-	hosts := []string{cu.GetURL()}
+	hosts := []string{cu.GetURL(), "localhost"}
 
 	if isTLS {
 		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithProfile("tls"), msp.WithCSR(&msp.CSRInfo{
