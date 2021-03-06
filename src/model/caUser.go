@@ -460,7 +460,8 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 
 	_, err := mspClient.Register(request)
 	if err != nil {
-		return errors.WithMessage(err, "fail to register "+cu.GetUsername())
+		global.Logger.Error("fial to get register ", zap.Error(err))
+		// return errors.WithMessage(err, "fail to register "+cu.GetUsername())
 	}
 	return nil
 }
@@ -475,10 +476,12 @@ func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 
 	if isTLS {
 		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithProfile("tls"), msp.WithCSR(&msp.CSRInfo{
+			CN: username,
 			Hosts: hosts,
 		}))
 	} else {
 		err = mspClient.Enroll(username, msp.WithSecret(cu.Password), msp.WithCSR(&msp.CSRInfo{
+			CN: username,
 			Hosts: hosts,
 		}))
 	}
