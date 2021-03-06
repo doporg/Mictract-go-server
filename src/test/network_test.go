@@ -25,11 +25,31 @@ var testNet = model.Network{
 	},
 	Organizations: []model.Organization{
 		{
+			ID: 1,
 			Name: "org1",
+			NetworkID: 1,
 			Peers: []model.Peer{
 				{
 					Name: "peer1.org1.net1.com",
 				},
+			},
+			Users: []string {
+				"Admin1@org1.net1.com",
+				"User1@org1.net1.com",
+			},
+		},
+		{
+			ID: -1,
+			Name: "ordererorg",
+			NetworkID: 1,
+			Peers: []model.Peer{
+				{
+					Name: "orderer1.net1.com",
+				},
+			},
+			Users: []string{
+				"Admin1@net1.com",
+				"User1@net1.com",
 			},
 		},
 	},

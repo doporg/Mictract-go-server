@@ -68,7 +68,7 @@ func (p *Peer) CreateConfigMap() {
 	name := p.GetName()
 	peerId := p.GetName()
 	// Note: local MSP id should be like "Org1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
-	localMSPId := fmt.Sprintf("Org%dMSP", p.OrganizationID)
+	localMSPId := fmt.Sprintf("org%dMSP", p.OrganizationID)
 
 	configMap := &apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

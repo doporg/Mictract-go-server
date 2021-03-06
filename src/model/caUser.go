@@ -290,7 +290,7 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte, isTLS bool) error {
 		defer f2.Close()
 		_, _ = f2.Write(cacert)
 
-		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.com"))
+		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.pem"))
 		if err != nil {
 			return err
 		}
@@ -424,7 +424,7 @@ func (cu *CaUser) GetCACert() string {
 }
 
 func (cu *CaUser) GetCert() string {
-	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", "cert.pem"))
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", cu.GetUsername() + "-cert.pem"))
 	if err != nil {
 		global.Logger.Error("fail to read cert.pem", zap.Error(err))
 	}

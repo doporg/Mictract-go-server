@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"mictract/config"
 	"path/filepath"
 )
@@ -35,9 +36,16 @@ type SDKConfigOrganizations struct {
 	Mspid                  string   `yaml:"mspid"`
 	CryptoPath             string   `yaml:"cryptoPath"`
 	Peers                  []string `yaml:"peers"`
+	Users				map[string]*SDKConfigOrganizationsUsers `yaml:"users"`
 	CertificateAuthorities []string `yaml:"certificateAuthorities"`
 }
-
+type SDKConfigOrganizationsUsers struct{
+	Key   SDKConfigPem `yaml:"key"`
+	Cert  SDKConfigPem `yaml:"cert"`
+}
+type SDKConfigPem struct {
+	Pem string `yaml:"pem"`
+}
 type SDKConfigNode struct {
 	URL        string `yaml:"url"`
 	TLSCACerts struct {
@@ -87,24 +95,61 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	for _, org := range n.Organizations {
 		sdkconfig.Organizations[org.Name] = &SDKConfigOrganizations{
 			Mspid:                  org.Name + "MSP",
-			CryptoPath:             "peerOrganizations/" + org.Name + "." + n.Name + ".com/users/{username}/msp",
+			CryptoPath: filepath.Join(config.LOCAL_BASE_PATH, n.Name, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", org.ID, n.ID),
+				"users", "{username}", "msp"),
+			// CryptoPath:             "peerOrganizations/" + org.Name + "." + n.Name + ".com/users/{username}/msp",
 			Peers:                  []string{},
+			Users: map[string]*SDKConfigOrganizationsUsers{},
 			CertificateAuthorities: []string{},
 		}
+
 		for _, peer := range org.Peers {
 			sdkconfig.Organizations[org.Name].Peers = append(sdkconfig.Organizations[org.Name].Peers, peer.Name)
 		}
 
-		sdkconfig.Organizations[org.Name].CertificateAuthorities = append(sdkconfig.Organizations[org.Name].CertificateAuthorities, "ca."+org.Name+"."+n.Name+".com")
+		if org.ID != -1 {
+			sdkconfig.Organizations[org.Name].CertificateAuthorities = append(sdkconfig.Organizations[org.Name].CertificateAuthorities, "ca."+org.Name+"."+n.Name+".com")
+		} else {
+			sdkconfig.Organizations[org.Name].CertificateAuthorities = append(sdkconfig.Organizations[org.Name].CertificateAuthorities, "ca."+n.Name+".com")
+		}
+
+
+		// users
+		for _, user := range org.Users {
+			causer := NewCaUserFromDomainName(user)
+			sdkconfig.Organizations[org.Name].Users[user] = &SDKConfigOrganizationsUsers{
+				Key: SDKConfigPem{
+					Pem: causer.GetPrivateKey(),
+				},
+				Cert: SDKConfigPem{
+					Pem: causer.GetCert(),
+				},
+			}
+		}
 	}
+	/*
 	sdkconfig.Organizations["ordererorg"] = &SDKConfigOrganizations{
-		Mspid:                  "ordererorg" + "MSP",
-		CryptoPath:             "ordererOrganizations/" + n.Name + ".com/users/{username}/msp",
+		Mspid:                  "ordererMSP",
+		CryptoPath: filepath.Join(config.LOCAL_BASE_PATH, n.Name, "ordererOrganizations", n.Name + ".com", "users", "{username}", "msp"),
+		// CryptoPath:             "ordererOrganizations/" + n.Name + ".com/users/{username}/msp",
 		Peers:                  nil,
+		Users: map[string]*SDKConfigOrganizationsUsers{},
 		CertificateAuthorities: []string{},
 	}
 	sdkconfig.Organizations["ordererorg"].CertificateAuthorities = append(sdkconfig.Organizations["ordererorg"].CertificateAuthorities, "ca."+n.Name+".com")
-
+	// users
+	for _, user := range org.Users {
+		causer := NewCaUserFromDomainName(user)
+		sdkconfig.Organizations[org.Name].Users[user] = &SDKConfigOrganizationsUsers{
+			Key: SDKConfigPem{
+				Pem: causer.GetPrivateKey(),
+			},
+			Cert: SDKConfigPem{
+				Pem: causer.GetCert(),
+			},
+		}
+	}
+	*/
 	// orderers
 	for _, orderer := range n.Orders {
 		sdkconfig.Orderers[orderer.Name] = &SDKConfigNode{
@@ -153,6 +198,9 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		}
 	}
 
+	// Users
+
+
 	// channels else
 	for _, channel := range n.Channels {
 		sdkconfig.Channels[channel.Name] = &SDKConfigChannel{
@@ -182,22 +230,15 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	}
 
 	// certificateAuthorities
-	sdkconfig.CertificateAuthorities["ca."+n.Name+".com"] = &SDKCAs{
-		URL: "https://ca-" + n.Name + ":7054",
-		TLSCACerts: struct {
-			Pem []string "yaml:\"pem\""
-		}{Pem: []string{NewCaUserFromDomainName("orderer1." + n.Name + ".com").GetCACert()}},
-		Registrar: struct {
-			EnrollId     string "yaml:\"enrollId\""
-			EnrollSecret string "yaml:\"enrollSecret\""
-		}{
-			EnrollId:     "admin",
-			EnrollSecret: "adminpw",
-		},
-	}
 	for _, org := range n.Organizations {
-		sdkconfig.CertificateAuthorities["ca." + org.Name + "." + n.Name + ".com"] = &SDKCAs{
-			URL: "https://ca-" + org.Name + "-" + n.Name + ":7054",
+		url := fmt.Sprintf("https://ca-org%d-net%d:7054", org.ID, org.NetworkID)
+		caName := fmt.Sprintf("ca.org%d.net%d.com", org.ID, org.NetworkID)
+		if org.ID == -1 {
+			url = fmt.Sprintf("https://ca-net%d:7054", org.NetworkID)
+			caName = fmt.Sprintf("ca.net%d.com", org.NetworkID)
+		}
+		sdkconfig.CertificateAuthorities[caName] = &SDKCAs{
+			URL: url,
 			TLSCACerts: struct {
 				Pem []string "yaml:\"pem\""
 			}{Pem: []string{NewCaUserFromDomainName(org.Peers[0].Name).GetCACert()}},

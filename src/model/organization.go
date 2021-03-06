@@ -11,11 +11,15 @@ import (
 
 type Organization struct {
 	ID int `json:"id"`
-	Name        string `json:"name"`
-	Peers       Peers  `json:"peers"`
-	MSPID       string `json:"mspid"`
-	MSPPath     string `json:"msppath"`
 	NetworkID	int	`json:"networkid"`
+	Name        string `json:"name"`
+	MSPID       string `json:"mspid"`
+
+	Peers       Peers  `json:"peers"`
+	Users		[]string `json:"users"`
+
+	// for add org (configtx.yaml)
+	MSPPath     string `json:"msppath"`
 	//CAID        string `json:"caid"`
 	//NetworkName string `json:"networkname"`
 }
@@ -64,7 +68,7 @@ Organizations:
 func (org *Organization) NewMspClient() (*mspclient.Client, error) {
 	sdk, err := GetSDKByNetWorkID(org.NetworkID)
 	if err != nil {
-		return nil, errors.New("fail to get sdk")
+		return nil, errors.WithMessage(err, "fail to get sdk")
 	}
 	caID := ""
 	if org.ID == -1 {

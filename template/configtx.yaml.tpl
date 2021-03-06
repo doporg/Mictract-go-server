@@ -1,39 +1,39 @@
 Organizations:
     - &OrdererOrg
-        Name: OrdererOrg
-        ID: OrdererMSP
+        Name: ordererorg
+        ID: ordererMSP
         MSPDir: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/msp
         Policies:
             Readers:
                 Type: Signature
-                Rule: "OR('OrdererMSP.member')"
+                Rule: "OR('ordererMSP.member')"
             Writers:
                 Type: Signature
-                Rule: "OR('OrdererMSP.member')"
+                Rule: "OR('ordererMSP.member')"
             Admins:
                 Type: Signature
-                Rule: "OR('OrdererMSP.admin')"
+                Rule: "OR('ordererMSP.admin')"
 
         OrdererEndpoints:
             - orderer1-net{{.ID}}:7050
 
     - &Org1
-        Name: Org1
-        ID: Org1MSP
+        Name: org1
+        ID: org1MSP
         MSPDir: /mictract/networks/net{{.ID}}/peerOrganizations/org1.net{{.ID}}.com/msp
         Policies:
             Readers:
                 Type: Signature
-                Rule: "OR('Org1MSP.admin', 'Org1MSP.peer', 'Org1MSP.client')"
+                Rule: "OR('org1MSP.admin', 'org1MSP.peer', 'org1MSP.client')"
             Writers:
                 Type: Signature
-                Rule: "OR('Org1MSP.admin', 'Org1MSP.client')"
+                Rule: "OR('org1MSP.admin', 'org1MSP.client')"
             Admins:
                 Type: Signature
-                Rule: "OR('Org1MSP.admin')"
+                Rule: "OR('org1MSP.admin')"
             Endorsement:
                 Type: Signature
-                Rule: "OR('Org1MSP.peer')"
+                Rule: "OR('org1MSP.peer')"
 
         AnchorPeers:
             - Host: peer1-org1-net{{.ID}}

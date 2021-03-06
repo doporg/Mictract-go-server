@@ -65,7 +65,8 @@ func (o *Orderer) GetPod() (*apiv1.Pod, error) {
 func (o *Orderer) CreateConfigMap() {
 	name := o.GetName()
 	// Note: local MSP id should be like "Orderer1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
-	localMSPId := fmt.Sprintf("Orderer%dMSP", o.OrdererID)
+	// localMSPId := fmt.Sprintf("Orderer%dMSP", o.OrdererID)
+	localMSPId := "ordererMSP"
 
 	configMap := &apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

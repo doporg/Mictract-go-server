@@ -115,7 +115,7 @@ func (n *Network) Deploy() (err error) {
 
 	// TODO: make it sync
 	// wait for pulling images when first deploy
-	time.Sleep(60 * time.Second)
+	time.Sleep(30 * time.Second)
 
 	// call CaUser.GenerateOrgMsp for GetSDK
 	causers := []CaUser {
@@ -246,6 +246,18 @@ func (n *Network) Deploy() (err error) {
 		m.Create()
 	}
 
+	// Create first Channel channl1
+	if err := n.UpdateSDK(); err != nil {
+		return err
+	}
+	_, err = GetSDKByNetWorkID(1)
+	if err != nil {
+		return err
+	}
+	if err := n.CreateChannel("channel1", "orderer1.net1.com"); err != nil {
+		return errors.WithMessage(err, "fail to create channel")
+	}
+
 	// TODO: join peers into the first channel
 	// TODO: create the rest of organizations
 
@@ -293,7 +305,12 @@ func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
 }
 
 func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
+	global.Logger.Info("current SDK:")
+	for k, _ := range global.SDKs {
+		global.Logger.Info(k)
+	}
 	n := Network{Name: fmt.Sprintf("net%d", id)}
+	global.Logger.Info("get sdk " + n.Name)
 	//return n.GetSDK()
 	sdk, ok := global.SDKs[n.Name]
 	if !ok {
@@ -304,24 +321,28 @@ func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
 
 
 
-func (n *Network)GetAllPeerAdminSigningIdentities() ([]msp.SigningIdentity, error) {
+func (n *Network)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
 	signs := []msp.SigningIdentity{}
+	// peer admin (n.Orgnaizations include ordererorg
 	for _, org := range n.Organizations {
 		username := fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, n.ID)
+		if org.ID == -1 {
+			username = fmt.Sprintf("Admin1@net%d.com", n.ID)
+		}
 		password := "admin1pw"
 
 		mspClient, err := org.NewMspClient()
 		if err != nil {
-			global.Logger.Error(fmt.Sprintf("fail to get %s mspClient", org.Name), zap.Error(err))
+			global.Logger.Error(fmt.Sprintf("fail to get org%d mspClient", org.ID), zap.Error(err))
 		}
 
 		if err := mspClient.Enroll(username, mspclient.WithSecret(password)); err != nil {
 			global.Logger.Error("fail to enroll user " + username, zap.Error(err))
 		}
 
-		sign, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, n.ID))
+		sign, err := mspClient.GetSigningIdentity(username)
 		if err != nil {
-			global.Logger.Error(fmt.Sprintf("fail to get org%d AdminSigningIdentity", org.ID))
+			global.Logger.Error(fmt.Sprintf("fail to get org%d AdminSigningIdentity", org.ID), zap.Error(err))
 		}
 		signs = append(signs, sign)
 	}
@@ -337,7 +358,7 @@ func (n *Network)CreateChannel(channelName, ordererURL string) error {
 	}
 	channelConfigTxPath := filepath.Join(mConfig.LOCAL_BASE_PATH, fmt.Sprintf("net%d", n.ID), channelName + ".tx")
 
-	adminIdentitys, err := n.GetAllPeerAdminSigningIdentities()
+	adminIdentitys, err := n.GetAllAdminSigningIdentities()
 	if err != nil {
 		return errors.WithMessage(err, "fail to get all SigningIdentities")
 	}
