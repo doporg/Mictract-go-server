@@ -16,6 +16,7 @@ var (
 	DB					*gorm.DB
 	Logger				*zap.Logger
 	SDKs				map[string]*fabsdk.FabricSDK
+	Nets				map[string]interface{}
 	K8sClientset		*kubernetes.Clientset
 	K8sRestConfig		*rest.Config
 	K8sInformer			cache.SharedIndexInformer

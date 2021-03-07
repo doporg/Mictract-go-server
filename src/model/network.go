@@ -47,20 +47,24 @@ var (
 	// one orderer one org one peer
 	networks = []Network{
 		{
+			ID: 1,
 			Name: "net1",
-			Orders: []Order{
-				{
-					Name: "orderer.net1.com",
-				},
-			},
+			Orders: []Order{},
+			Channels: []Channel{},
 			Organizations: []Organization{
 				{
+					ID: -1,
+					NetworkID: 1,
+					Name: "ordererorg",
+					Peers: []Peer{},
+					Users: []string{},
+				},
+				{
+					ID: 1,
+					NetworkID: 1,
 					Name: "org1",
-					Peers: []Peer{
-						{
-							Name: "peer1.org1.net1.com",
-						},
-					},
+					Peers: []Peer{},
+					Users: []string{},
 				},
 			},
 			Consensus:  "solo",
@@ -97,10 +101,18 @@ func DeleteNetworkByID(id int) error {
 	return nil
 }
 
+func (n *Network)initNetsForThisNet() {
+	global.Nets[fmt.Sprintf("net%d", n.ID)] = *n
+	_, _ = global.Nets[fmt.Sprintf("net%d", n.ID)].(Network)
+}
+
 // Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
 //	and then join the rest of peers and orderers.
 // The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
 func (n *Network) Deploy() (err error) {
+	//
+	n.initNetsForThisNet()
+
 	// create ca and tools resources
 	tools := kubernetes.Tools{}
 	models := []kubernetes.K8sModel{
@@ -115,7 +127,7 @@ func (n *Network) Deploy() (err error) {
 
 	// TODO: make it sync
 	// wait for pulling images when first deploy
-	time.Sleep(30 * time.Second)
+	time.Sleep(60 * time.Second)
 
 	// call CaUser.GenerateOrgMsp for GetSDK
 	causers := []CaUser {
@@ -246,19 +258,20 @@ func (n *Network) Deploy() (err error) {
 		m.Create()
 	}
 
+	// TODO: make it sync
+	// wait for pulling images when first deploy
+	time.Sleep(30 * time.Second)
+
 	// Create first Channel channl1
-	if err := n.UpdateSDK(); err != nil {
-		return err
-	}
-	_, err = GetSDKByNetWorkID(1)
-	if err != nil {
-		return err
-	}
-	if err := n.CreateChannel("channel1", "orderer1.net1.com"); err != nil {
+	if err := n.CreateChannel("orderer1.net1.com"); err != nil {
 		return errors.WithMessage(err, "fail to create channel")
 	}
 
 	// TODO: join peers into the first channel
+	if err := n.Organizations[1].Peers[0].JoinChannel("channel1", fmt.Sprintf("orderer1.net%d.com", n.ID)); err != nil {
+		return errors.WithMessage(err, "fail to join channel")
+	}
+
 	// TODO: create the rest of organizations
 
 	return nil
@@ -282,7 +295,8 @@ func (n *Network) RenderConfigtx() error {
 }
 
 func (n *Network) UpdateSDK() error {
-	sdkconfig, err := yaml.Marshal(NewSDKConfig(n))
+	net := global.Nets[fmt.Sprintf("net%d", n.ID)].(Network)
+	sdkconfig, err := yaml.Marshal(NewSDKConfig(&net))
 	if err != nil {
 		return err
 	}
@@ -296,12 +310,12 @@ func (n *Network) UpdateSDK() error {
 }
 
 func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
-	if _, ok := global.SDKs[n.Name]; !ok {
+	if _, ok := global.SDKs[fmt.Sprintf("net%d", n.ID)]; !ok {
 		if err := n.UpdateSDK(); err != nil {
 			return nil, err
 		}
 	}
-	return global.SDKs[n.Name], nil
+	return global.SDKs[fmt.Sprintf("net%d", n.ID)], nil
 }
 
 func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
@@ -319,7 +333,47 @@ func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
 	return sdk, nil
 }
 
-
+func UpdateNets(v interface{}) {
+	global.Logger.Info("UpdateNets ing...")
+	global.Logger.Info("!!!!!!Null pointer exception may occur!!!!!!!")
+	switch non := v.(type) {
+	case Network:
+		global.Nets[fmt.Sprintf("net%d", non.ID)] = non
+		if err := non.UpdateSDK(); err != nil {
+			global.Logger.Error("fail to update sdk", zap.Error(err))
+		}
+	case *CaUser:
+		cu := non
+		n := global.Nets[fmt.Sprintf("net%d", cu.NetworkID)].(Network)
+		if cu.Type == "peer" {
+			n.Organizations[cu.OrganizationID].Peers = append(n.Organizations[cu.OrganizationID].Peers, Peer{Name: cu.GetUsername()})
+			//peers := n.Organizations[cu.OrganizationID].Peers
+			//peers = append(peers, Peer{Name: cu.GetUsername()})
+		} else{
+			if cu.IsInOrdererOrg() {
+				if cu.Type == "admin" || cu.Type == "user"{
+					n.Organizations[0].Users = append(n.Organizations[0].Users, cu.GetUsername())
+				} else {
+					n.Orders = append(n.Orders, Order{Name: cu.GetUsername()})
+					n.Organizations[0].Peers = append(n.Organizations[0].Peers, Peer{Name: cu.GetUsername()})
+				}
+			} else {
+				n.Organizations[cu.OrganizationID].Users = append(n.Organizations[cu.OrganizationID].Users, cu.GetUsername())
+			}
+		}
+		n.Show()
+		// jump
+		UpdateNets(n)
+	case Channel:
+		c := non
+		n := global.Nets[fmt.Sprintf("net%d", c.NetworkID)].(Network)
+		n.Channels = append(n.Channels, c)
+		//jump
+		UpdateNets(n)
+	default:
+		global.Logger.Error("UpdateNets only support type(*CaUser, Network, Channel)")
+	}
+}
 
 func (n *Network)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
 	signs := []msp.SigningIdentity{}
@@ -351,7 +405,9 @@ func (n *Network)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
 }
 
 
-func (n *Network)CreateChannel(channelName, ordererURL string) error {
+func (n *Network)CreateChannel(ordererURL string) error {
+	channelName := fmt.Sprintf("channel%d", len(n.Channels) + 1)
+
 	sdk, err := n.GetSDK()
 	if err != nil {
 		return errors.WithMessage(err, "fail to get sdk ")
@@ -374,7 +430,23 @@ func (n *Network)CreateChannel(channelName, ordererURL string) error {
 		return errors.WithMessage(err, "fail to get rc ")
 	}
 	_, err = rc.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
+
+	// update nets
+	UpdateNets(Channel{
+		ID: len(n.Channels) + 1,
+		Name: channelName,
+		NetworkID: n.ID,
+	})
+
 	return err
+}
+
+func (n *Network)Show() {
+	out, err := json.Marshal(n)
+	if err != nil {
+		global.Logger.Error("fail to show network", zap.Error(err))
+	}
+	fmt.Println(string(out))
 }
 
 // 给network中的自定义字段使用

@@ -174,6 +174,9 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// peers
 	for _, org := range n.Organizations {
+		if org.ID == -1 {
+			continue
+		}
 		for _, peer := range org.Peers {
 			sdkconfig.Peers[peer.Name] = &SDKConfigNode{
 				URL: peer.GetURL(),
@@ -203,6 +206,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 	// channels else
 	for _, channel := range n.Channels {
+		channel.Name = fmt.Sprintf("channel%d", channel.ID)
 		sdkconfig.Channels[channel.Name] = &SDKConfigChannel{
 			Peers: map[string]struct {
 				EndorsingPeer  bool "yaml:\"endorsingPeer\""
@@ -241,7 +245,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			URL: url,
 			TLSCACerts: struct {
 				Pem []string "yaml:\"pem\""
-			}{Pem: []string{NewCaUserFromDomainName(org.Peers[0].Name).GetCACert()}},
+			}{Pem: []string{GetCACertByOrgIDAndNetID(org.ID, org.NetworkID)}},
 			Registrar: struct {
 				EnrollId     string "yaml:\"enrollId\""
 				EnrollSecret string "yaml:\"enrollSecret\""
