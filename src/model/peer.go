@@ -7,6 +7,7 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"github.com/pkg/errors"
+	"mictract/global"
 )
 
 type Peer struct {
@@ -39,11 +40,40 @@ func (peer *Peer)JoinChannel(channelID, ordererURL string) error {
 		return errors.WithMessage(err, "fail to get sdk ")
 	}
 
-	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin@org%d.net%d.com", user.OrganizationID, user.NetworkID)), fabsdk.WithOrg(fmt.Sprintf("org%d", user.OrganizationID)))
+	username := fmt.Sprintf("Admin1@org%d.net%d.com", user.OrganizationID, user.NetworkID)
+	global.Logger.Info(fmt.Sprintf("Obtaining %s's user certificate", username))
+	rcp := sdk.Context(fabsdk.WithUser(username), fabsdk.WithOrg(fmt.Sprintf("org%d", user.OrganizationID)))
 	rc, err := resmgmt.New(rcp)
 	if err != nil {
 		return errors.WithMessage(err, "fail to get rc ")
 	}
 
-	return rc.JoinChannel(channelID, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
+	return rc.JoinChannel(channelID, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL), resmgmt.WithTargetEndpoints(peer.Name))
+}
+
+func (peer *Peer)GetJoinedChannel() ([]string, error) {
+	user := NewCaUserFromDomainName(peer.Name)
+	sdk, err:= GetSDKByNetWorkID(user.NetworkID)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get sdk ")
+	}
+
+	username := fmt.Sprintf("Admin1@org%d.net%d.com", user.OrganizationID, user.NetworkID)
+	global.Logger.Info(fmt.Sprintf("Obtaining %s's user certificate", username))
+	rcp := sdk.Context(fabsdk.WithUser(username), fabsdk.WithOrg(fmt.Sprintf("org%d", user.OrganizationID)))
+	rc, err := resmgmt.New(rcp)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get rc ")
+	}
+
+	resps, err := rc.QueryChannels(resmgmt.WithTargetEndpoints(peer.Name), resmgmt.WithRetry(retry.DefaultResMgmtOpts))
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to query channel for peer")
+	}
+
+	ret := []string{}
+	for _, resp := range resps.Channels {
+		ret = append(ret, resp.ChannelId)
+	}
+	return ret, nil
 }

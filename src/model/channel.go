@@ -3,11 +3,13 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/base64"
+	"fmt"
+	"go.uber.org/zap"
+	"mictract/model/kubernetes"
 
 	"mictract/config"
 	"mictract/global"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/golang/protobuf/proto"
@@ -20,6 +22,7 @@ import (
 )
 
 type Channel struct {
+	ID            int 	`json:"id"`
 	Name          string        `json:"name"`
 	NetworkID   int        `json:"networkID"`
 	Organizations Organizations `json:"organizations"`
@@ -43,7 +46,7 @@ func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, err
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get sdk ")
 	}
-	ledgerClient, err := ledger.New(sdk.ChannelContext(c.Name, fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
+	ledgerClient, err := ledger.New(sdk.ChannelContext(fmt.Sprintf("channel%d", c.ID), fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
 	if err != nil {
 		return nil, err
 	}
@@ -62,17 +65,64 @@ func (c *Channel) NewResmgmtClient(username, orgname string) (*resmgmt.Client, e
 	return resmgmtClient, nil
 }
 
+func (c *Channel)CreateChannel(ordererURL string) error {
+	global.Logger.Info("channel is creating...")
+
+	global.Logger.Info("Update the global variable Nets and insert the new channel into it")
+	UpdateNets(*c)
+
+	UpdateSDK(c.NetworkID)
+
+	sdk, err := GetSDKByNetWorkID(c.NetworkID)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get sdk ")
+	}
+	channelConfigTxPath := filepath.Join(config.LOCAL_BASE_PATH, fmt.Sprintf("net%d", c.NetworkID), fmt.Sprintf("channel%d.tx", c.ID))
+
+	n, err := GetNetworkfromNets(c.NetworkID)
+	if err != nil {
+		return err
+	}
+
+	global.Logger.Info("Obtaining administrator signature...")
+	adminIdentitys, err := n.GetAllAdminSigningIdentities()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get all SigningIdentities")
+	}
+
+
+	req := resmgmt.SaveChannelRequest{
+		ChannelID: fmt.Sprintf("channel%d", c.ID),
+		ChannelConfigPath: channelConfigTxPath,
+		SigningIdentities: adminIdentitys,
+	}
+
+	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@org1.net%d.com", n.ID)), fabsdk.WithOrg("org1"))
+	rc, err := resmgmt.New(rcp)
+	if err != nil {
+		return errors.WithMessage(err, "fail to get rc ")
+	}
+
+	global.Logger.Info("Submitting to create channel transaction...")
+	_, err = rc.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
+
+
+	return err
+}
+
 func (c *Channel)getAndStoreConfig() error {
+	global.Logger.Info("Obtaining channel configuration ...")
 	if len(c.Organizations) < 1 || len(c.Orderers) < 1 {
 		return errors.New("There is no organization in the channel.")
 	}
 
-	ledgerClient, err := c.NewLedgerClient("Admin", c.Organizations[0].Name)
+	// ledgerClient, err := c.NewLedgerClient("Admin", c.Organizations[0].Name)
+	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
 	if err != nil {
 		return errors.WithMessage(err, "fail to get ledgerClient")
 	}
 
-	cfg, err := ledgerClient.QueryConfigBlock()
+	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
 	if err != nil {
 		return errors.WithMessage(err, "fail to query config")
 	}
@@ -82,6 +132,7 @@ func (c *Channel)getAndStoreConfig() error {
 		return err
 	}
 
+	global.Logger.Info("Storing channel configuration ...")
 	f, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "config_block.pb"))
 	if err != nil {
 		return err
@@ -105,7 +156,7 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 		ChannelConfig:     envelopeFile,
 		SigningIdentities: signs,
 	}
-	resmgmtClient, err := c.NewResmgmtClient("Admin", c.Organizations[0].Name)
+	resmgmtClient, err := c.NewResmgmtClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
 	_, err = resmgmtClient.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(c.Orderers[0].Name))
 	if err != nil {
 		return errors.WithMessage(err, "fail to update channel config")
@@ -118,10 +169,8 @@ func (c *Channel) AddOrg(org *Organization) error {
 		return err
 	}
 
-	c.Organizations = append(c.Organizations, *org)
-
 	// generate configtx.yaml
-	configtxFile, err := os.Create(filepath.Join(config.LOCAL_BASE_PATH, "scripts", "addorg", "configtx.yaml"))
+	configtxFile, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "configtx.yaml"))
 	if err != nil {
 		return errors.WithMessage(err, "fail to open configtx.yaml")
 	}
@@ -133,9 +182,15 @@ func (c *Channel) AddOrg(org *Organization) error {
 
 	// call addorg.sh to generate org_update_in_envelope.pb
 	// TODO
-	cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrg", c.Name, org.MSPID)
-	output, err := cmd.CombinedOutput()
-	global.Logger.Info(string(output))
+	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrg", c.Name, org.MSPID)
+	//output, err := cmd.CombinedOutput()
+	//global.Logger.Info(string(output))
+	tools := kubernetes.Tools{}
+	_, _, err = tools.ExecCommand(
+		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
+		"addOrg",
+		fmt.Sprintf("channel%d", c.ID),
+		org.MSPID,)
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}
@@ -143,16 +198,23 @@ func (c *Channel) AddOrg(org *Organization) error {
 	// sign for org_update_in_envelope.pb and update it
 	signs := []msp.SigningIdentity{}
 	for _, org := range c.Organizations {
-		mspClient, err := org.NewMspClient()
+		//mspClient, err := org.NewMspClient()
+		//if err != nil {
+		//	return errors.WithMessage(err, "fail to get mspClient "+org.Name)
+		//}
+		//adminIdentity, err := mspClient.GetSigningIdentity("Admin")
+		//if err != nil {
+		//	return errors.WithMessage(err, org.Name+"fail to sign")
+		//}
+		global.Logger.Info(fmt.Sprintf("Obtaining org%d's adminIdentity", org.ID))
+		adminIdentity, err := org.GetAdminSigningIdentity()
 		if err != nil {
-			return errors.WithMessage(err, "fail to get mspClient "+org.Name)
-		}
-		adminIdentity, err := mspClient.GetSigningIdentity("Admin")
-		if err != nil {
-			return errors.WithMessage(err, org.Name+"fail to sign")
+			global.Logger.Error("fail to get adminIdentity", zap.Error(err))
 		}
 		signs = append(signs, adminIdentity)
 	}
+
+	c.Organizations = append(c.Organizations, *org)
 
 	// update org_update_in_envelope.pb
 	return c.updateConfig(signs)
@@ -181,9 +243,15 @@ func (c *Channel)UpdateAnchors(org *Organization) error {
 
 	// call addorg.sh to generate org_update_in_envelope.pb
 	// TODO
-	cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "updateAnchors", c.Name, org.MSPID)
-	output, err := cmd.CombinedOutput()
-	global.Logger.Info(string(output))
+	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "updateAnchors", c.Name, org.MSPID)
+	//output, err := cmd.CombinedOutput()
+	//global.Logger.Info(string(output))
+	tools := kubernetes.Tools{}
+	_, _, err = tools.ExecCommand(
+		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
+		"updateAnchors",
+		fmt.Sprintf("channel%d", c.ID),
+		org.MSPID)
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}
@@ -191,13 +259,18 @@ func (c *Channel)UpdateAnchors(org *Organization) error {
 	// sign for org_update_in_envelope.pb and update it
 	signs := []msp.SigningIdentity{}
 	for _, org := range c.Organizations {
-		mspClient, err := org.NewMspClient()
+		//mspClient, err := org.NewMspClient()
+		//if err != nil {
+		//	return errors.WithMessage(err, "fail to get mspClient "+org.Name)
+		//}
+		//adminIdentity, err := mspClient.GetSigningIdentity("Admin")
+		//if err != nil {
+		//	return errors.WithMessage(err, org.Name+"fail to sign")
+		//}
+		global.Logger.Info(fmt.Sprintf("Obtaining org%d's adminIdentity", org.ID))
+		adminIdentity, err := org.GetAdminSigningIdentity()
 		if err != nil {
-			return errors.WithMessage(err, "fail to get mspClient "+org.Name)
-		}
-		adminIdentity, err := mspClient.GetSigningIdentity("Admin")
-		if err != nil {
-			return errors.WithMessage(err, org.Name+"fail to sign")
+			global.Logger.Error("fail to get adminIdentity", zap.Error(err))
 		}
 		signs = append(signs, adminIdentity)
 	}
@@ -254,9 +327,15 @@ func (c *Channel)AddOrderers(org *Organization) error {
 
 	// call addorg.sh to generate org_update_in_envelope.pb
 	// TODO
-	cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrderers", c.Name)
-	output, err := cmd.CombinedOutput()
-	global.Logger.Info(string(output))
+	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrderers", c.Name)
+	//output, err := cmd.CombinedOutput()
+	//global.Logger.Info(string(output))
+	tools := kubernetes.Tools{}
+	_, _, err = tools.ExecCommand(
+		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
+		"addOrderers",
+		fmt.Sprintf("channel%d", c.ID),
+		)
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}

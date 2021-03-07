@@ -308,7 +308,7 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte, isTLS bool) error {
 		if err != nil {
 			return err
 		}
-		ouconfig := `NodeOUs:
+			ouconfig := `NodeOUs:
   Enable: true
   ClientOUIdentifier:
     Certificate: cacerts/<filename>
@@ -350,8 +350,7 @@ func copy(src, dst string) (int64, error) {
 	}
 
 	defer destination.Close()
-	nBytes, err := io.Copy(destination, source)
-	return nBytes, err
+	return io.Copy(destination, source)
 }
 
 func (cu *CaUser) GetOrgMspDir() string {
@@ -375,6 +374,8 @@ func (cu *CaUser) GenerateOrgMsp() error {
 	basePath := cu.GetOrgMspDir()
 
 
+	//fmt.Println(cu, cu.GetOrgMspDir())
+
 	// cacerts/ca-cert.pem
 	if err := os.MkdirAll(filepath.Join(basePath, "cacerts"), os.ModePerm); err != nil {
 		return err
@@ -382,6 +383,8 @@ func (cu *CaUser) GenerateOrgMsp() error {
 	if _, err := copy(filepath.Join(basePath, "..", "ca", "ca-cert.pem"), filepath.Join(basePath, "cacerts", "ca-cert.pem")); err != nil {
 		return err
 	}
+
+	//fmt.Println(cu, cu.GetOrgMspDir(), basePath, "..", "ca", "ca-cert.pem")
 
 	// tlscacerts/tlsca-cert.pem
 	if err := os.MkdirAll(filepath.Join(basePath, "tlscacerts"), os.ModePerm); err != nil {
@@ -396,6 +399,7 @@ func (cu *CaUser) GenerateOrgMsp() error {
 	if err != nil {
 		return err
 	}
+	defer f3.Close()
 	ouconfig := `NodeOUs:
   Enable: true
   ClientOUIdentifier:
@@ -423,6 +427,14 @@ func (cu *CaUser) GetCACert() string {
 	return string(content)
 }
 
+func GetCACertByOrgIDAndNetID(orgID, netID int) string {
+	cu := CaUser{
+		OrganizationID: orgID,
+		NetworkID: netID,
+	}
+	return cu.GetCACert()
+}
+
 func (cu *CaUser) GetCert() string {
 	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", cu.GetUsername() + "-cert.pem"))
 	if err != nil {
@@ -446,7 +458,7 @@ func (cu *CaUser) GetTLSCert(isServerTLSCert bool) string {
 func (cu *CaUser) GetPrivateKey() string {
 	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "keystore", "priv_sk"))
 	if err != nil {
-		global.Logger.Error("fail to read cert.pem", zap.Error(err))
+		global.Logger.Error("fail to read priv_sk", zap.Error(err))
 	}
 	return string(content)
 }
@@ -463,6 +475,9 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 		global.Logger.Error("fial to get register ", zap.Error(err))
 		// return errors.WithMessage(err, "fail to register "+cu.GetUsername())
 	}
+
+	UpdateNets(cu)
+
 	return nil
 }
 

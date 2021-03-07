@@ -18,39 +18,22 @@ import (
 var testNet = model.Network{
 	ID: 1,
 	Name: "net1",
-	Orders: []model.Order{
-		{
-			Name: "orderer1.net1.com",
-		},
-	},
+	Orders: []model.Order{},
+	Channels: []model.Channel{},
 	Organizations: []model.Organization{
 		{
-			ID: 1,
-			Name: "org1",
+			ID: -1,
 			NetworkID: 1,
-			Peers: []model.Peer{
-				{
-					Name: "peer1.org1.net1.com",
-				},
-			},
-			Users: []string {
-				"Admin1@org1.net1.com",
-				"User1@org1.net1.com",
-			},
+			Name: "ordererorg",
+			MSPID: "ordererMSP",
+			Peers: []model.Peer{},
 		},
 		{
-			ID: -1,
-			Name: "ordererorg",
+			ID: 1,
 			NetworkID: 1,
-			Peers: []model.Peer{
-				{
-					Name: "orderer1.net1.com",
-				},
-			},
-			Users: []string{
-				"Admin1@net1.com",
-				"User1@net1.com",
-			},
+			MSPID: "org1MSP",
+			Name: "org1",
+			Peers: []model.Peer{},
 		},
 	},
 	Consensus:  "solo",
@@ -86,7 +69,7 @@ func TestListNetworks(t *testing.T) {
 */
 func TestDeployNetwork(t *testing.T) {
 	var err error
-	if err = testNet.Deploy(); err != nil {
+	if err = model.GetBasicNetwork().Deploy(); err != nil {
 		global.Logger.Error("testing", zap.Error(err))
 	}
 

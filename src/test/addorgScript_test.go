@@ -18,7 +18,7 @@ func TestABC(t *testing.T) {
 
 func TestAddOrg(t *testing.T) {
 	channelID := "mychannel"
-	mspID := "Org3MSP"
+	mspID := "org3MSP"
 
 	cmd := exec.Command(filepath.Join(config.LOCAL_BASE_PATH, "scripts/addorg/addorg.sh"), "addOrg", channelID, mspID)
 	output, err := cmd.CombinedOutput()
@@ -30,7 +30,7 @@ func TestAddOrg(t *testing.T) {
 
 func TestAddOrderers(t *testing.T) {
 	channelID := "byfn-sys-channel"
-	mspID := "Org3MSP"
+	mspID := "org3MSP"
 
 	cmd := exec.Command(filepath.Join(config.LOCAL_BASE_PATH, "scripts/addorg/addorg.sh"), "addOrderers", channelID, mspID)
 	output, err := cmd.CombinedOutput()

@@ -13,18 +13,30 @@ var net = model.Network{
 	ID: 1,
 	Name: "net1",
 	Orders: []model.Order{
-		{
-			Name: "orderer1.net1.com",
-		},
+		{"orderer1.net1.com"},
 	},
+	Channels: []model.Channel{},
 	Organizations: []model.Organization{
 		{
-			Name: "org1",
+			ID: -1,
 			NetworkID: 1,
+			Name: "ordererorg",
 			Peers: []model.Peer{
-				{
-					Name: "peer1.org1.net1.com",
-				},
+				{"orderer1.net1.com"},
+			},
+			Users: []string{
+				"Admin1@net1.com",
+			},
+		},
+		{
+			ID: 1,
+			NetworkID: 1,
+			Name: "org1",
+			Peers: []model.Peer{
+				{"peer1.org1.net1.com"},
+			},
+			Users: []string{
+				"Admin1@org1.net1.com",
 			},
 		},
 	},
@@ -153,7 +165,7 @@ func TestGetSign(t *testing.T) {
 	sdk, _ := fabsdk.New(config.FromRaw(out, "yaml"))
 
 	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance("ca.org1.net1.com"), mspclient.WithOrg("org1"))*/
-	net.UpdateSDK()
+	model.UpdateSDK(net.ID)
 	mspClient, err := org.NewMspClient()
 	if err != nil {
 		fmt.Println("llj:", err.Error())
@@ -200,7 +212,7 @@ func TestGetCertAndPriv(t *testing.T) {
 }
 
 func TestGetOrdererAdminSign(t *testing.T) {
-	net.UpdateSDK()
+	model.UpdateSDK(net.ID)
 	// orderer admin
 	username := fmt.Sprintf("Admin1@net%d.com", 1)
 	password := "admin1pw"
@@ -226,4 +238,64 @@ func TestGetOrdererAdminSign(t *testing.T) {
 
 
 	fmt.Println(sign.Identifier())
+}
+
+func TestUpdateNets(t *testing.T) {
+	global.Nets["net1"] = net
+	user := model.NewCaUserFromDomainName("User1@org1.net1.com")
+	admin := model.NewCaUserFromDomainName("Admin1@net1.com")
+	peer := model.NewCaUserFromDomainName("peer1.org1.net1.com")
+	orderer := model.NewCaUserFromDomainName("orderer1.net1.com")
+
+	channel := model.Channel{
+		ID: 1,
+		NetworkID: 1,
+	}
+	model.UpdateNets(user)
+	n := global.Nets["net1"].(model.Network)
+	n.Show()
+
+	model.UpdateNets(admin)
+	n = global.Nets["net1"].(model.Network)
+	n.Show()
+
+	model.UpdateNets(peer)
+	n = global.Nets["net1"].(model.Network)
+	n.Show()
+
+	model.UpdateNets(orderer)
+	n = global.Nets["net1"].(model.Network)
+	n.Show()
+
+
+	model.UpdateNets(channel)
+	n = global.Nets["net1"].(model.Network)
+	n.Show()
+}
+
+func TestGetAllAdminSign(t *testing.T) {
+	model.UpdateNets(net)
+	ids, err := net.GetAllAdminSigningIdentities()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	for _, id := range ids {
+		fmt.Println(string(id.EnrollmentCertificate()))
+	}
+}
+
+func TestGetPeerChannels(t *testing.T) {
+	model.UpdateNets(net)
+
+	ans, err := net.Organizations[1].Peers[0].GetJoinedChannel()
+	if err != nil {
+		global.Logger.Error("fail to get channels", zap.Error(err))
+	}
+	for _, s := range ans {
+		fmt.Println(s)
+	}
+}
+
+func TestGetCaCert(t *testing.T) {
+	fmt.Println(model.NewCaUserFromDomainName("peer1.org1.net1.com").GetCACert())
 }
