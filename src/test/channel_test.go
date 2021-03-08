@@ -144,3 +144,13 @@ func TestChannelAddOrg(t *testing.T) {
 	}
 }
 
+func TestChannelUpdateAnchors(t *testing.T) {
+	model.UpdateNets(n)
+	net, _ := model.GetNetworkfromNets(1)
+
+	channel := net.Channels[0]
+	if err := channel.UpdateAnchors(1); err != nil {
+		fmt.Println(err.Error())
+	}
+}
+

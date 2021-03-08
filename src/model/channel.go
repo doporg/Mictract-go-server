@@ -255,23 +255,43 @@ func (c *Channel) AddOrg(orgID int) error {
 	UpdateNets(*c)
 
 	// TODO
-	//
-	//org.CreateNodeEntity()
-	return nil
+	return org.CreateNodeEntity()
 }
 
-func (c *Channel)UpdateAnchors(org *Organization) error {
+func (c *Channel)UpdateAnchors(orgID int) error {
+	// 不要让用户自定义了，让所有peer都成为锚节点
+	global.Logger.Info("Update anchors...")
+	if orgID <= 0 {
+		return errors.New(fmt.Sprintf("org ID is incorrect. ID: %d", orgID))
+	}
+
+	org := Organization{}
+	flag := false
+	for _, o := range c.Organizations {
+		if orgID == o.ID {
+			org = o
+			flag = true
+			break
+		}
+	}
+	if !flag {
+		return errors.New(fmt.Sprintf("The org%d could not be found in channel%d", orgID, c.ID))
+	}
+
 	// generate config_block.pb
 	if err := c.getAndStoreConfig(); err != nil {
 		return err
 	}
 
 	// generate anchors.json
-	st := `"{"mod_policy":"Admins","value":{"anchor_peers":[`
+	st := `{"mod_policy":"Admins","value":{"anchor_peers":[`
 	for _, peer := range org.Peers {
-		st += `{"host":"` + peer.Name + `",port:7051},`
+		st += `{"host":"` + NewCaUserFromDomainName(peer.Name).GetURL() + `","port":7051},`
 	}
-	st += `]},"version":"0"}"`
+	st += `{"host":"` + "lilingj.github.io" + `","port":7051},`
+	// jq这个坑货，多一个逗号就解析不出来
+	st = st[:(len(st) - 1)]
+	st += `]},"version":"0"}`
 	f, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "anchors.json"))
 	if err != nil {
 		return err

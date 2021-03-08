@@ -20,7 +20,7 @@ createConfigUpdate() {
 }
 
 updateAnchors() {
-	jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups":{"'${MSPID}'":{"values":{"AnchorPeers":.[1]}}}}}}}' $WORKDIR/gen/config.json anchors.json > $WORKDIR/gen/modified_config.json
+	jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups":{"'${MSPID}'":{"values":{"AnchorPeers":.[1]}}}}}}}' $WORKDIR/gen/config.json $WORKDIR/anchors.json > $WORKDIR/gen/modified_config.json
 	createConfigUpdate ${CHANNEL_NAME} $WORKDIR/gen/config.json $WORKDIR/gen/modified_config.json $WORKDIR/org_update_in_envelope.pb
 }
 
