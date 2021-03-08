@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
+	"mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"path/filepath"
@@ -39,11 +40,13 @@ func (orgs *Organizations) Value() (driver.Value, error) {
 }
 
 func (org *Organization) GetMSPPath() string {
-	ret := NewCaUserFromDomainName(fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, org.NetworkID))
+	ret := filepath.Join(config.LOCAL_BASE_PATH, fmt.Sprintf("net%d", org.NetworkID))
 	if org.ID == -1 {
-		ret = NewCaUserFromDomainName(fmt.Sprintf("Admin1@net%d.com", org.NetworkID))
+		ret = filepath.Join(ret, "ordererOrganizations", fmt.Sprintf("net%d.com", org.NetworkID))
+	} else {
+		ret = filepath.Join(ret, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", org.ID, org.NetworkID))
 	}
-	return filepath.Join(ret.GetBasePath(), "..", "msp")
+	return filepath.Join(ret, "msp")
 }
 
 func (org *Organization) GetConfigtxFile() string {
@@ -101,6 +104,30 @@ func (org *Organization) GetAdminSigningIdentity() (msp.SigningIdentity, error){
 		return nil, errors.WithMessage(err, org.Name+"fail to sign")
 	}
 	return adminIdentity, nil
+}
+
+// eg: GetBasicOrg(1, 1).CreateBasicOrganizationEntity()
+// eg: GetBasicOrg(1, 1).CreateNodeEntity()
+func GetBasicOrg(orgID, netID int) *Organization {
+	if orgID == -1 {
+		return &Organization{
+			ID: orgID,
+			NetworkID: netID,
+			Name: "ordererorg",
+			MSPID: "ordererMSP",
+			Peers: []Peer{},
+			Users: []string{},
+		}
+	} else {
+		return &Organization{
+			ID: orgID,
+			Name: fmt.Sprintf("org%d", orgID),
+			NetworkID: netID,
+			MSPID: fmt.Sprintf("org%dMSP", orgID),
+			Peers: []Peer{},
+			Users: []string{},
+		}
+	}
 }
 
 // CreateBasicOrganizationEntity starts a CA node,

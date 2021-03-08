@@ -361,7 +361,17 @@ func UpdateNets(v interface{}) {
 	case Channel:
 		c := non
 		n := global.Nets[fmt.Sprintf("net%d", c.NetworkID)].(Network)
-		n.Channels = append(n.Channels, c)
+		flag := false
+		for i, channel := range n.Channels {
+			if channel.ID == c.ID {
+				n.Channels[i] = c
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			n.Channels = append(n.Channels, c)
+		}
 		//jump
 		UpdateNets(n)
 	default:

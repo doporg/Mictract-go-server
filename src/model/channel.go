@@ -42,6 +42,9 @@ func (channels *Channels) Value() (driver.Value, error) {
 
 func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, error) {
 	//sdk, ok := global.SDKs[c.NetworkName]
+	if err := UpdateSDK(c.NetworkID); err != nil {
+		return nil, err
+	}
 	sdk, err := GetSDKByNetWorkID(c.NetworkID)
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get sdk ")
@@ -110,24 +113,33 @@ func (c *Channel)CreateChannel(ordererURL string) error {
 	return err
 }
 
+//func (c *Channel) GetBlockByID()
+
+func (c *Channel) GetChannelConfig() ([]byte, error) {
+	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get ledgerClient")
+	}
+
+	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to query config")
+	}
+
+	//fmt.Println(cfg.Header)
+	//fmt.Println(cfg.Data)
+	//fmt.Println(cfg.Metadata)
+
+	return proto.Marshal(cfg)
+}
+
 func (c *Channel)getAndStoreConfig() error {
 	global.Logger.Info("Obtaining channel configuration ...")
 	if len(c.Organizations) < 1 || len(c.Orderers) < 1 {
 		return errors.New("There is no organization in the channel.")
 	}
 
-	// ledgerClient, err := c.NewLedgerClient("Admin", c.Organizations[0].Name)
-	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
-	if err != nil {
-		return errors.WithMessage(err, "fail to get ledgerClient")
-	}
-
-	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
-	if err != nil {
-		return errors.WithMessage(err, "fail to query config")
-	}
-
-	bt, err := proto.Marshal(cfg)
+	bt, err := c.GetChannelConfig()
 	if err != nil {
 		return err
 	}
@@ -150,26 +162,40 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 	if err != nil {
 		return err
 	}
+	defer envelopeFile.Close()
 
 	req := resmgmt.SaveChannelRequest{
-		ChannelID:         c.Name,
+		ChannelID:         fmt.Sprintf("channel%d", c.ID),
 		ChannelConfig:     envelopeFile,
 		SigningIdentities: signs,
 	}
 	resmgmtClient, err := c.NewResmgmtClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
-	_, err = resmgmtClient.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(c.Orderers[0].Name))
+	_, err = resmgmtClient.SaveChannel(
+		req,
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
+		resmgmt.WithOrdererEndpoint(c.Orderers[0].Name))
 	if err != nil {
 		return errors.WithMessage(err, "fail to update channel config")
 	}
 	return nil
 }
 
-func (c *Channel) AddOrg(org *Organization) error {
+func (c *Channel) AddOrg(orgID int) error {
+	global.Logger.Info(fmt.Sprintf("Add org%d to channel%d", orgID, c.ID))
+	org := GetBasicOrg(orgID, c.NetworkID)
+
+	global.Logger.Info("Obtaining channel config...")
 	if err := c.getAndStoreConfig(); err != nil {
 		return err
 	}
 
+	// 启动ca，获取各种证书
+	if err := org.CreateBasicOrganizationEntity(); err != nil {
+		return err
+	}
+
 	// generate configtx.yaml
+	global.Logger.Info("generate configtx.yaml...")
 	configtxFile, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "configtx.yaml"))
 	if err != nil {
 		return errors.WithMessage(err, "fail to open configtx.yaml")
@@ -185,6 +211,7 @@ func (c *Channel) AddOrg(org *Organization) error {
 	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrg", c.Name, org.MSPID)
 	//output, err := cmd.CombinedOutput()
 	//global.Logger.Info(string(output))
+	global.Logger.Info("generate org_update_in_envelope.pb...")
 	tools := kubernetes.Tools{}
 	_, _, err = tools.ExecCommand(
 		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
@@ -196,6 +223,7 @@ func (c *Channel) AddOrg(org *Organization) error {
 	}
 
 	// sign for org_update_in_envelope.pb and update it
+	global.Logger.Info("sign for org_update_in_envelope.pb")
 	signs := []msp.SigningIdentity{}
 	for _, org := range c.Organizations {
 		//mspClient, err := org.NewMspClient()
@@ -214,10 +242,22 @@ func (c *Channel) AddOrg(org *Organization) error {
 		signs = append(signs, adminIdentity)
 	}
 
-	c.Organizations = append(c.Organizations, *org)
 
 	// update org_update_in_envelope.pb
-	return c.updateConfig(signs)
+	global.Logger.Info("Update channel config...")
+	if err := c.updateConfig(signs); err != nil {
+		return err
+	}
+
+	// update channel to Nets
+	global.Logger.Info("Update Nets...")
+	c.Organizations = append(c.Organizations, *org)
+	UpdateNets(*c)
+
+	// TODO
+	//
+	//org.CreateNodeEntity()
+	return nil
 }
 
 func (c *Channel)UpdateAnchors(org *Organization) error {

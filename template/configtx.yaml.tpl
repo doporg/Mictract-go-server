@@ -18,7 +18,7 @@ Organizations:
             - orderer1-net{{.ID}}:7050
 
     - &Org1
-        Name: org1
+        Name: org1MSP
         ID: org1MSP
         MSPDir: /mictract/networks/net{{.ID}}/peerOrganizations/org1.net{{.ID}}.com/msp
         Policies:

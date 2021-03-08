@@ -6,16 +6,45 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"go.uber.org/zap"
+	"mictract/config"
 	"mictract/global"
 	"mictract/model"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
+//
 var n = model.Network{
 	ID: 1,
 	Name: "net1",
-	Orders: []model.Order{},
-	Channels: []model.Channel{},
+	Orders: []model.Order{
+		{"orderer1.net1.com"},
+	},
+	Channels: []model.Channel{
+		model.Channel{
+			ID: 1,
+			Name: "channel1",
+			NetworkID: 1,
+			Organizations: []model.Organization{
+				{
+					ID: 1,
+					Name: "org1",
+					NetworkID: 1,
+					MSPID: "org1MSP",
+					Peers: []model.Peer{
+						{"peer1.org1.net1.com"},
+					},
+					Users: []string{
+						"Admin1@org1.net1.com",
+					},
+				},
+			},
+			Orderers: []model.Order{
+				{"orderer1.net1.com"},
+			},
+		},
+	},
 	Organizations: []model.Organization{
 		{
 			ID: -1,
@@ -26,6 +55,7 @@ var n = model.Network{
 			},
 			Users: []string{
 				"Admin1@net1.com",
+				"User1@net1.com",
 			},
 		},
 		{
@@ -37,6 +67,7 @@ var n = model.Network{
 			},
 			Users: []string{
 				"Admin1@org1.net1.com",
+				"User1@org1.net1.com",
 			},
 		},
 	},
@@ -44,11 +75,6 @@ var n = model.Network{
 	TlsEnabled: true,
 }
 
-func TestCreateChannel(t *testing.T) {
-	if err := n.CreateChannel("orderer1.net1.com"); err != nil {
-		fmt.Println(err.Error())
-	}
-}
 
 func TestJoinChannel(t *testing.T) {
 	//adminUser := "Admin1@org1.net1.com"
@@ -94,53 +120,27 @@ func TestWithUser(t *testing.T) {
 	fmt.Println(string(id.EnrollmentCertificate()))
 }
 
-func TestChannelAddOrg(t *testing.T) {
+func TestGetChannelConfig(t *testing.T)  {
 	model.UpdateNets(n)
-	channel := model.Channel{
-		ID: 1,
-		Name: "channel1",
-		NetworkID: 1,
-		Organizations: []model.Organization{
-			{
-				ID: 1,
-				Name: "org1",
-				NetworkID: 1,
-				MSPID: "org1MSP",
-				Peers: []model.Peer{
-					{"peer1.org1.net1.com"},
-				},
-				Users: []string{
-					"Admin1@org1.net1.com",
-				},
-			},
-		},
-		Orderers: []model.Order{
-			{"orderer1.net1.com"},
-		},
-	}
-	org := model.Organization{
-		ID: 2,
-		NetworkID: 1,
-		Name: "org2",
-		MSPID: "org2MSP",
-		Peers: []model.Peer{
-			{"peer1.org2.net1.com"},
-		},
-		Users: []string{
-			"Admin1@org2.net1.com",
-		},
-	}
-	if err := channel.AddOrg(&org); err != nil {
+	net, _:= model.GetNetworkfromNets(1)
+	channel := net.Channels[0]
+
+	bt, err := channel.GetChannelConfig()
+	if err != nil {
 		fmt.Println(err.Error())
 	}
-	//ledgerClient, err := channel.NewLedgerClient(channel.Organizations[0].Users[0], channel.Organizations[0].Name)
-	//if err != nil {
-	//	global.Logger.Error("fail to get ledgerClient", zap.Error(err))
-	//}
-	//blk, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(channel.Organizations[0].Peers[0].Name))
-	//if err != nil {
-	//	global.Logger.Error("fail go get configBlock", zap.Error(err))
-	//}
-	//fmt.Println(blk.String())
+	f, _ := os.Create(filepath.Join(config.LOCAL_BASE_PATH, "config_block.pb"))
+	f.Write(bt)
+	f.Close()
+}
+
+func TestChannelAddOrg(t *testing.T) {
+	model.UpdateNets(n)
+	net, _:= model.GetNetworkfromNets(1)
+
+	channel := net.Channels[0]
+	if err := channel.AddOrg(2); err != nil {
+		fmt.Println(err.Error())
+	}
 }
 

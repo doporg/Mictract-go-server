@@ -1,7 +1,7 @@
 #!/bin/bash
 # input config_block.pb configtx.yaml||anchors.json
 # output org_update_in_envelope.pb
-WORKDIR=/mictract/networks/scripts/addorg
+WORKDIR=/mictract/scripts/addorg
 
 createConfigUpdate() {
   CHANNEL=$1
