@@ -1,10 +1,10 @@
 package main
 
 import (
+	"github.com/fvbock/endless"
 	"mictract/global"
 	_ "mictract/init"
 	"mictract/router"
-	"github.com/fvbock/endless"
 )
 
 func main() {

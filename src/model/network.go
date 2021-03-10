@@ -1,8 +1,10 @@
 package model
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	mConfig "mictract/config"
@@ -13,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -108,8 +111,16 @@ func GetNetworkfromNets(networkID int) (*Network, error) {
 // Get basic Network for deploy
 // eg: GetBasicNetWork().Deploy()
 func GetBasicNetwork() *Network {
+	netID := 0
+	for k, _ := range global.Nets {
+		curID, _ := strconv.Atoi(k[3:])
+		if netID < curID {
+			netID = curID
+		}
+	}
+	netID++
 	return &Network{
-		ID: len(global.Nets) + 1,
+		ID: netID,
 		Name: fmt.Sprintf("net%d", len(global.Nets) + 1),
 		Orders: []Order{},
 		Organizations: []Organization{},
@@ -289,7 +300,7 @@ func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
 func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
 	global.Logger.Info("current SDK:")
 	for k, _ := range global.SDKs {
-		global.Logger.Info(k)
+		global.Logger.Info("|" + k)
 	}
 	n := Network{Name: fmt.Sprintf("net%d", id)}
 	global.Logger.Info("get sdk " + n.Name)
@@ -416,6 +427,114 @@ func (n *Network)Show() {
 		global.Logger.Error("fail to show network", zap.Error(err))
 	}
 	fmt.Println(string(out))
+}
+
+// AddOrderers
+// eg: GetSystemChannel(n.ID).AddOrderers()
+func (n *Network)AddOrderersToSystemChannel() error {
+	global.Logger.Info("Add Orderer to system-channel ...")
+	c, err := GetSystemChannel(n.ID)
+	if err != nil {
+		return err
+	}
+
+	// generate config_block.pb
+	global.Logger.Info("Get and Store system-channel config ...")
+	if err := c.getAndStoreConfig(); err != nil {
+		return err
+	}
+
+	newOrdererID := len(n.Orders) + 1
+	newOrderer := Order{
+		Name: fmt.Sprintf("orderer%d.net%d.com", newOrdererID, n.ID),
+	}
+	n.Orders = append(n.Orders, newOrderer)
+
+
+	UpdateSDK(n.ID)
+	sdk, err := GetSDKByNetWorkID(n.ID)
+	if err != nil {
+		return err
+	}
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca-net%d", n.ID)), mspclient.WithOrg("ordererorg"))
+	if err != nil {
+		return err
+	}
+	// regiester new orderer
+	user := NewOrdererCaUser(newOrdererID, n.ID, fmt.Sprintf("orderer%dpw", newOrdererID))
+	if err := user.Register(mspClient); err != nil {
+		return err
+	}
+
+	// enroll new orderer
+	if err := user.Enroll(mspClient, true); err != nil {
+		return err
+	}
+	if err := user.Enroll(mspClient, false); err != nil {
+		return err
+	}
+
+	// generate ord1.json
+	st := `["`
+	for _, orderer := range n.Orders {
+		user := NewCaUserFromDomainName(orderer.Name)
+		tlscert := user.GetTLSCert(true)
+		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) +
+			`","host":"` + user.GetURL() +
+			`","port":7050,` +
+			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) + `"},`
+	}
+	st += "]"
+	f1, err := os.Create(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "ord1.json"))
+	if err != nil {
+		return err
+	}
+	if _, err = f1.WriteString(st); err != nil {
+		return err
+	}
+	f1.Close()
+
+	// generate ord2.json
+	st = `[`
+	for _, orderer := range n.Orders {
+		st += `"` + orderer.Name + `",`
+	}
+	st += "]"
+	f2, err := os.Create(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "ord2.json"))
+	if err != nil {
+		return err
+	}
+	if _, err = f2.WriteString(st); err != nil {
+		return err
+	}
+	f2.Close()
+
+	// call addorg.sh to generate org_update_in_envelope.pb
+	// TODO
+	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrderers", c.Name)
+	//output, err := cmd.CombinedOutput()
+	//global.Logger.Info(string(output))
+	tools := kubernetes.Tools{}
+	_, _, err = tools.ExecCommand(
+		filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
+		"addOrderers",
+		fmt.Sprintf("channel%d", c.ID),
+	)
+	if err != nil {
+		return errors.WithMessage(err, "fail to exec addorg.sh")
+	}
+
+	// sign for org_update_in_envelope.pb and update it
+	signs := []msp.SigningIdentity{}
+	adminIdentity, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@net%d.com", n.ID))
+	if err != nil {
+		return errors.WithMessage(err, "ordererAdmin fail to sign")
+	}
+	signs = append(signs, adminIdentity)
+
+	// update org_update_in_envelope.pb
+	return c.updateConfig(signs)
 }
 
 // 给network中的自定义字段使用

@@ -154,3 +154,40 @@ func TestChannelUpdateAnchors(t *testing.T) {
 	}
 }
 
+func TestGetSysChannelConfig(t *testing.T) {
+	model.UpdateNets(n)
+	net, _ := model.GetNetworkfromNets(1)
+
+	//if err := net.AddOrderersToSystemChannel(); err != nil {
+	//	fmt.Println(err.Error())
+	//}
+	bt, err := model.GetSysChannelConfig(net.ID)
+	if err != nil {
+		fmt.Println("++++" + err.Error())
+	}
+	f, _ := os.Create(filepath.Join(config.LOCAL_BASE_PATH, "config_block.pb"))
+	f.Write(bt)
+	f.Close()
+	//
+	//
+	//model.UpdateSDK(net.ID)
+	//sdk, _ := model.GetSDKByNetWorkID(net.ID)
+	//channelContext, err := sdk.ChannelContext(
+	//	"system-channel",
+	//	fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", net.ID)),
+	//	fabsdk.WithOrg("ordererorg"))()
+	//
+	//fmt.Println(string(channelContext.EnrollmentCertificate()))
+	//if err != nil {
+	//	fmt.Println("abc:" + err.Error())
+	//}
+	//
+	//
+	//discoveryService, err := channelContext.ChannelService().Discovery()
+	//if err != nil {
+	//	fmt.Println("def:" + err.Error())
+	//}
+	//
+	//discoveryService.GetPeers()
+}
+

@@ -17,8 +17,12 @@ var (
 	// The config file path, which to connect k8s.
 	K8S_CONFIG = filepath.Join(LOCAL_MOUNT_PATH, "kube-config.yaml")
 
-	NFS_SERVER_URL = "nfs-server"
+	NFS_SERVER_URL = "192.168.49.1"
 
 	// LOCAL_BASE_PATH is where the scripts folder is actually stored.
-	LOCAL_SCRIPTS_PATH = filepath.Join(LOCAL_BASE_PATH, "scripts")
+	LOCAL_SCRIPTS_PATH = filepath.Join(LOCAL_MOUNT_PATH, "scripts")
+
+	SDK_LEVEL = "debug"
+
+	MYSQL_PW = "123456"
 )

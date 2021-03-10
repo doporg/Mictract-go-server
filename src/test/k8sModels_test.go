@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	mysql		= &kubernetes.Mysql{}
 	tools 		= &kubernetes.Tools{}
 	ordererCA	= kubernetes.NewOrdererCA(1)
 	org1PeerCA	= kubernetes.NewPeerCA(1, 1)
@@ -108,4 +109,12 @@ func TestCreateOrdererCA(t *testing.T) {
 
 func TestDeleteOrdererCA(t *testing.T) {
 	ordererCA.Delete()
+}
+
+func TestCreateMysql(t *testing.T) {
+	mysql.Create()
+}
+
+func TestDeleteMysql(t *testing.T) {
+	mysql.Delete()
 }

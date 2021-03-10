@@ -68,6 +68,20 @@ func (c *Channel) NewResmgmtClient(username, orgname string) (*resmgmt.Client, e
 	return resmgmtClient, nil
 }
 
+func GetSystemChannel(netID int) (*Channel, error) {
+	net, err := GetNetworkfromNets(netID)
+	if err != nil {
+		return nil, err
+	}
+	return &Channel{
+		ID: -1,
+		Name: "system-channel",
+		NetworkID: netID,
+		Organizations: []Organization{net.Organizations[0]},
+		Orderers: Orders{},
+	}, nil
+}
+
 func (c *Channel)CreateChannel(ordererURL string) error {
 	global.Logger.Info("channel is creating...")
 
@@ -114,8 +128,41 @@ func (c *Channel)CreateChannel(ordererURL string) error {
 }
 
 //func (c *Channel) GetBlockByID()
+func GetSysChannelConfig(netID int) ([]byte, error) {
+	if err := UpdateSDK(netID); err != nil {
+		return nil, err
+	}
+	sdk, err := GetSDKByNetWorkID(netID)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to get sdk ")
+	}
+
+	global.Logger.Info("Obtaining ledgerClient ...")
+
+	ledgerClient, err := ledger.New(sdk.ChannelContext(
+		"system-channel",
+		fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)),
+		fabsdk.WithOrg("ordererorg")))
+	if err != nil {
+		return nil, err
+	}
+
+	global.Logger.Info("Query ...")
+	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	peername := fmt.Sprintf("peer1.org1.net%d.com", netID)
+	//orderername := fmt.Sprintf("orderer1.net%d.com", netID)
+	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(peername))
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to query config")
+	}
+
+	return proto.Marshal(cfg)
+}
 
 func (c *Channel) GetChannelConfig() ([]byte, error) {
+	if c.ID == -1 {
+		return nil, errors.New("please call GetSysChannelConfig")
+	}
 	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get ledgerClient")
@@ -135,14 +182,24 @@ func (c *Channel) GetChannelConfig() ([]byte, error) {
 
 func (c *Channel)getAndStoreConfig() error {
 	global.Logger.Info("Obtaining channel configuration ...")
-	if len(c.Organizations) < 1 || len(c.Orderers) < 1 {
+	if c.ID != -1 && (len(c.Organizations) < 1 || len(c.Orderers) < 1) {
 		return errors.New("There is no organization in the channel.")
 	}
 
-	bt, err := c.GetChannelConfig()
-	if err != nil {
-		return err
+	bt := []byte{}
+	var err error
+	if c.ID != -1 {
+		bt, err = c.GetChannelConfig()
+		if err != nil {
+			return err
+		}
+	} else {
+		bt, err = GetSysChannelConfig(c.NetworkID)
+		if err != nil {
+			return err
+		}
 	}
+
 
 	global.Logger.Info("Storing channel configuration ...")
 	f, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "config_block.pb"))
@@ -341,8 +398,10 @@ func (c *Channel)UpdateAnchors(orgID int) error {
 }
 
 // AddOrderers
-func (c *Channel)AddOrderers(org *Organization) error {
-	if c.Name != "system-channel" {
+// eg: GetSystemChannel(n.ID).AddOrderers(Order{fmt.Sprintf("orderer%d.net%d.com", len(n.Orderers) + 1, n.ID)})
+func (c *Channel)AddOrderers(orderer Order) error {
+	global.Logger.Info("Add Orderers ...")
+	if c.ID != -1 {
 		return errors.New("only for system-channel")
 	}
 
@@ -351,9 +410,11 @@ func (c *Channel)AddOrderers(org *Organization) error {
 		return err
 	}
 
+
+
 	// generate ord1.json
 	st := `["`
-	for _, orderer := range org.Peers {
+	for _, orderer := range c.Organizations[0].Peers {
 		tlscert := NewCaUserFromDomainName(orderer.Name).GetTLSCert(true)
 		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) +
 			`","host":"` + orderer.Name +
@@ -372,7 +433,7 @@ func (c *Channel)AddOrderers(org *Organization) error {
 
 	// generate ord2.json
 	st = `[`
-	for _, orderer := range org.Peers {
+	for _, orderer := range c.Organizations[0].Peers {
 		st += `"` + orderer.Name + `",`
 	}
 	st += "]"
@@ -402,13 +463,13 @@ func (c *Channel)AddOrderers(org *Organization) error {
 
 	// sign for org_update_in_envelope.pb and update it
 	signs := []msp.SigningIdentity{}
-	mspClient, err := org.NewMspClient()
+	mspClient, err := c.Organizations[0].NewMspClient()
 	if err != nil {
-		return errors.WithMessage(err, "fail to get mspClient "+org.Name)
+		return errors.WithMessage(err, "fail to get mspClient "+c.Organizations[0].Name)
 	}
 	adminIdentity, err := mspClient.GetSigningIdentity("Admin")
 	if err != nil {
-		return errors.WithMessage(err, org.Name+"fail to sign")
+		return errors.WithMessage(err, c.Organizations[0].Name+"fail to sign")
 	}
 	signs = append(signs, adminIdentity)
 

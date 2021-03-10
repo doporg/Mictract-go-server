@@ -80,7 +80,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			Organization: "org1",
 			Logging: struct {
 				Level string "yaml:\"level\""
-			}{Level: "info"},
+			}{Level: config.SDK_LEVEL},
 			Cryptoconfig: struct {
 				Path string "yaml:\"path\""
 			}{Path: filepath.Join(config.LOCAL_BASE_PATH, n.Name)},
@@ -93,8 +93,14 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	}
 	// organizations
 	for _, org := range n.Organizations {
-		sdkconfig.Organizations[org.Name] = &SDKConfigOrganizations{
-			Mspid:                  org.Name + "MSP",
+		orgName := fmt.Sprintf("org%d", org.ID)
+		orgMSP := orgName + "MSP"
+		if org.ID == -1 {
+			orgName = "ordererorg"
+			orgMSP = "ordererMSP"
+		}
+		sdkconfig.Organizations[orgName] = &SDKConfigOrganizations{
+			Mspid:                  orgMSP,
 			CryptoPath: filepath.Join(config.LOCAL_BASE_PATH, n.Name, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", org.ID, n.ID),
 				"users", "{username}", "msp"),
 			// CryptoPath:             "peerOrganizations/" + org.Name + "." + n.Name + ".com/users/{username}/msp",
@@ -171,6 +177,15 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			EventSource    bool "yaml:\"eventSource\""
 		}{},
 	}
+	// channel system-channel
+	sdkconfig.Channels["system-channel"] = &SDKConfigChannel{
+		Peers: map[string]struct {
+			EndorsingPeer  bool "yaml:\"endorsingPeer\""
+			ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+			LedgerQuery    bool "yaml:\"ledgerQuery\""
+			EventSource    bool "yaml:\"eventSource\""
+		}{},
+	}
 
 	// peers
 	for _, org := range n.Organizations {
@@ -188,6 +203,18 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			}
 			//channels _default
 			sdkconfig.Channels["_default"].Peers[peer.Name] = struct {
+				EndorsingPeer  bool "yaml:\"endorsingPeer\""
+				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
+				LedgerQuery    bool "yaml:\"ledgerQuery\""
+				EventSource    bool "yaml:\"eventSource\""
+			}{
+				EndorsingPeer:  true,
+				ChaincodeQuery: true,
+				LedgerQuery:    true,
+				EventSource:    true,
+			}
+			//channels system-channel
+			sdkconfig.Channels["system-channel"].Peers[peer.Name] = struct {
 				EndorsingPeer  bool "yaml:\"endorsingPeer\""
 				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
 				LedgerQuery    bool "yaml:\"ledgerQuery\""
