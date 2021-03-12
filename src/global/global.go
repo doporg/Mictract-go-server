@@ -30,13 +30,13 @@ var (
 
 func init() {
 	initLogger()
-	// initDB()
+	//initDB()
 	initK8s()
 	initSDKs()
 }
 
 func Close() {
-	closeDB()
-	closeK8sInformer()
+	//closeDB()
+	//closeK8sInformer()
 	closeSDKs()
 }

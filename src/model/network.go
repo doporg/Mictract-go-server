@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"gorm.io/gorm/clause"
 	mConfig "mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
@@ -28,8 +31,11 @@ import (
 )
 
 type Network struct {
-	gorm.Model
-	ID            int           `json:"id"`
+	ID        int `json:"id" gorm:"primarykey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+
 	Name          string        `json:"name" binding:"required"`
 	Orders        Orders        `json:"orders" binding:"required"`
 	Organizations Organizations `json:"organizations" binding:"required"`
@@ -75,26 +81,80 @@ func FindNetworks(pageInfo request.PageInfo) ([]Network, error) {
 	// find all networks in the `/networks` directory
 	start := pageInfo.PageSize * (pageInfo.Page - 1)
 	end := pageInfo.PageSize * pageInfo.Page
-	if end > len(networks) {
-		end = len(networks)
+	if end > len(global.Nets) {
+		end = len(global.Nets)
 	}
-
+	networks := []Network{}
+	for _, v := range global.Nets {
+		networks = append(networks, v.(Network))
+	}
 	return networks[start:end], nil
 }
 
-func FindNetworkByID(id int) (Network, error) {
-	// TODO
-	for _, n := range networks {
-		if id == n.ID {
-			return n, nil
-		}
-	}
-
-	return Network{}, fmt.Errorf("network not found")
+func FindNetworkByID(id int) (*Network, error) {
+	return GetNetworkfromNets(id)
 }
 
+
+
 func DeleteNetworkByID(id int) error {
-	// TODO
+	if err := global.DB.Where("id = ?", id).Delete(&Network{}).Error; err != nil {
+		return errors.WithMessage(err, "Unable to delete network")
+	}
+	delete(global.Nets, fmt.Sprintf("net%d", id))
+	delete(global.SDKs, fmt.Sprintf("net%d", id))
+	return nil
+}
+
+func QueryAllNetwork() ([]Network, error){
+	nets := []Network{}
+	if err := global.DB.Find(&nets).Error; err != nil {
+		return nil, errors.WithMessage(err, "Fail to query all nets")
+	}
+	return nets, nil
+}
+
+//
+func (n *Network)Insert() error {
+	if err := global.DB.Create(n).Error; err != nil {
+		return errors.WithMessage(err, "Unable to insert network")
+	}
+	return nil
+}
+
+func UpsertAllNets()  {
+	for _, net := range global.Nets {
+		if err := global.DB.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "id"}},
+		}).Create(net.(Network)).Error; err != nil {
+			global.Logger.Error(fmt.Sprintf("fail to upsert net%d: ",  net.(Network).ID), zap.Error(err))
+		}
+	}
+}
+
+// update to db !!!!
+func (n *Network)Update() error {
+	nets, err := QueryAllNetwork()
+	if err != nil {
+		return errors.WithMessage(err, "No such network found")
+	}
+
+	isExist := false
+	for _, net := range nets {
+		if n.ID == net.ID {
+			isExist = true
+			break
+		}
+	}
+	if !isExist {
+		return errors.New("No such network found")
+	}
+
+	n.UpdatedAt  = time.Now()
+	if err := global.DB.Model(&User{}).Where("id = ?", n.ID).Updates(n).Error; err != nil {
+		return errors.WithMessage(err, "Fail to update")
+	}
+
 	return nil
 }
 
@@ -121,12 +181,15 @@ func GetBasicNetwork() *Network {
 	netID++
 	return &Network{
 		ID: netID,
-		Name: fmt.Sprintf("net%d", len(global.Nets) + 1),
+		Name: fmt.Sprintf("net%d", netID),
 		Orders: []Order{},
 		Organizations: []Organization{},
 		Channels: []Channel{},
 		Consensus: "solo",
 		TlsEnabled: true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		DeletedAt: gorm.DeletedAt{},
 	}
 }
 
@@ -457,17 +520,19 @@ func (n *Network)AddOrderersToSystemChannel() error {
 		return err
 	}
 
-	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca-net%d", n.ID)), mspclient.WithOrg("ordererorg"))
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca.net%d.com", n.ID)), mspclient.WithOrg("ordererorg"))
 	if err != nil {
 		return err
 	}
 	// regiester new orderer
+	global.Logger.Info("Regiester new orderer")
 	user := NewOrdererCaUser(newOrdererID, n.ID, fmt.Sprintf("orderer%dpw", newOrdererID))
 	if err := user.Register(mspClient); err != nil {
 		return err
 	}
 
 	// enroll new orderer
+	global.Logger.Info("Enroll new orderer")
 	if err := user.Enroll(mspClient, true); err != nil {
 		return err
 	}
@@ -476,7 +541,7 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	}
 
 	// generate ord1.json
-	st := `["`
+	st := `[`
 	for _, orderer := range n.Orders {
 		user := NewCaUserFromDomainName(orderer.Name)
 		tlscert := user.GetTLSCert(true)
@@ -485,6 +550,7 @@ func (n *Network)AddOrderersToSystemChannel() error {
 			`","port":7050,` +
 			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) + `"},`
 	}
+	st = st[:len(st) - 1]
 	st += "]"
 	f1, err := os.Create(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "ord1.json"))
 	if err != nil {
@@ -500,6 +566,7 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	for _, orderer := range n.Orders {
 		st += `"` + orderer.Name + `",`
 	}
+	st = st[:len(st) - 1]
 	st += "]"
 	f2, err := os.Create(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "ord2.json"))
 	if err != nil {
@@ -519,7 +586,7 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	_, _, err = tools.ExecCommand(
 		filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
 		"addOrderers",
-		fmt.Sprintf("channel%d", c.ID),
+		"system-channel",
 	)
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
@@ -534,8 +601,35 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	signs = append(signs, adminIdentity)
 
 	// update org_update_in_envelope.pb
-	return c.updateConfig(signs)
+	global.Logger.Info("update org_update_in_envelope.pb...")
+	envelopeFile, err := os.Open(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "org_update_in_envelope.pb"))
+	if err != nil {
+		return err
+	}
+	defer envelopeFile.Close()
+
+	resmgmtClient, err := resmgmt.New(
+		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", c.NetworkID)), fabsdk.WithOrg("ordererorg")))
+	if err != nil {
+		return err
+	}
+
+	req := resmgmt.SaveChannelRequest{
+		ChannelID:         "system-channel",
+		ChannelConfig:     envelopeFile,
+		SigningIdentities: signs,
+	}
+	_, err = resmgmtClient.SaveChannel(
+		req,
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
+		resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", c.NetworkID)))
+	if err != nil {
+		return errors.WithMessage(err, "fail to update channel config")
+	}
+	return nil
 }
+
+
 
 // 给network中的自定义字段使用
 // scan for scanner helper

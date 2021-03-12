@@ -57,6 +57,9 @@ func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, err
 }
 
 func (c *Channel) NewResmgmtClient(username, orgname string) (*resmgmt.Client, error) {
+	if err := UpdateSDK(c.NetworkID); err != nil {
+		return nil, err
+	}
 	sdk, err := GetSDKByNetWorkID(c.NetworkID)
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get sdk ")
@@ -137,24 +140,34 @@ func GetSysChannelConfig(netID int) ([]byte, error) {
 		return nil, errors.WithMessage(err, "fail to get sdk ")
 	}
 
-	global.Logger.Info("Obtaining ledgerClient ...")
-
-	ledgerClient, err := ledger.New(sdk.ChannelContext(
-		"system-channel",
-		fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)),
-		fabsdk.WithOrg("ordererorg")))
+	resmgmtClient, err := resmgmt.New(
+		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)), fabsdk.WithOrg("ordererorg")))
 	if err != nil {
 		return nil, err
 	}
 
-	global.Logger.Info("Query ...")
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	peername := fmt.Sprintf("peer1.org1.net%d.com", netID)
-	//orderername := fmt.Sprintf("orderer1.net%d.com", netID)
-	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(peername))
+	cfg, err := resmgmtClient.QueryConfigBlockFromOrderer("system-channel", resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", netID)))
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to query config")
+		return nil, errors.WithMessage(err, "fail to query system-channel config")
 	}
+	//global.Logger.Info("Obtaining ledgerClient ...")
+	//
+	//ledgerClient, err := ledger.New(sdk.ChannelContext(
+	//	"system-channel",
+	//	fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)),
+	//	fabsdk.WithOrg("ordererorg")))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//global.Logger.Info("Query ...")
+	//// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	//peername := fmt.Sprintf("peer1.org1.net%d.com", netID)
+	////orderername := fmt.Sprintf("orderer1.net%d.com", netID)
+	//cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(peername))
+	//if err != nil {
+	//	return nil, errors.WithMessage(err, "fail to query config")
+	//}
 
 	return proto.Marshal(cfg)
 }

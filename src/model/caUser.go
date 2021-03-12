@@ -444,9 +444,9 @@ func (cu *CaUser) GetCert() string {
 }
 
 func (cu *CaUser) GetTLSCert(isServerTLSCert bool) string {
-	filename := "server.crt"
+	filename := "client.crt"
 	if isServerTLSCert {
-		filename = "client.crt"
+		filename = "server.crt"
 	}
 	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "tls", filename))
 	if err != nil {

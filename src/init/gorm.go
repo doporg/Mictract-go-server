@@ -12,12 +12,24 @@ import (
 func createTables() {
 	err := global.DB.AutoMigrate(
 		model.User{},
+		model.Network{},
 	)
 
 	if err != nil {
 		global.Logger.Error("create tables failed", zap.Error(err))
 	} else {
 		global.Logger.Info("tables created")
+	}
+}
+
+func initNetsAndSDKs() {
+	nets, err := model.QueryAllNetwork()
+	if err != nil {
+		global.Logger.Error("fail to get all network from db")
+	}
+	for _, net := range nets {
+		model.UpdateNets(net)
+		model.UpdateSDK(net.ID)
 	}
 }
 
