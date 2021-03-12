@@ -22,6 +22,8 @@ spec:
           containerPort: 2345
         - name: ssh
           containerPort: 22
+        - name: mictract
+          containerPort: 8080
         volumeMounts:
         - name: networks
           mountPath: /mictract
@@ -30,4 +32,4 @@ spec:
         nfs:
           # configure your NFS server, `path` means `NFS_EXPOSED_PATH`
           path: /var/mictract
-          server: nfs-server
+          server: 192.168.49.1

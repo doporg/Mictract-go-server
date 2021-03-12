@@ -11,5 +11,8 @@ spec:
   - name: dlv
     port: 2345
     nodePort: 32345
+  - name: mictract
+    port: 8080
+    nodePort: 32323
   selector:
     app: mictract-dev
