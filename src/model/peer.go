@@ -23,8 +23,15 @@ func (peers *Peers) Scan(value interface{}) error {
 	return scan(&peers, value)
 }
 
-func (peers *Peers) Value() (driver.Value, error) {
+func (peers Peers) Value() (driver.Value, error) {
 	return value(peers)
+}
+func (peer *Peer) Scan(value interface{}) error {
+	return scan(&peer, value)
+}
+
+func (peer *Peer) Value() (driver.Value, error) {
+	return value(peer)
 }
 
 func (peer *Peer) GetURL() string {

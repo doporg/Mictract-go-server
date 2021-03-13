@@ -36,8 +36,16 @@ func (channels *Channels) Scan(value interface{}) error {
 	return scan(&channels, value)
 }
 
-func (channels *Channels) Value() (driver.Value, error) {
+func (channels Channels) Value() (driver.Value, error) {
 	return value(channels)
+}
+
+func (channel *Channel) Scan(value interface{}) error {
+	return scan(&channel, value)
+}
+
+func (channel Channel) Value() (driver.Value, error) {
+	return value(channel)
 }
 
 func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, error) {
@@ -250,6 +258,7 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 	return nil
 }
 
+// AddOrg uses the existing organization's certificate to update the configuration of the channel
 func (c *Channel) AddOrg(orgID int) error {
 	global.Logger.Info(fmt.Sprintf("Add org%d to channel%d", orgID, c.ID))
 	org := GetBasicOrg(orgID, c.NetworkID)
@@ -259,10 +268,10 @@ func (c *Channel) AddOrg(orgID int) error {
 		return err
 	}
 
-	// 启动ca，获取各种证书
-	if err := org.CreateBasicOrganizationEntity(); err != nil {
-		return err
-	}
+	//// 启动ca，获取各种证书
+	//if err := org.CreateBasicOrganizationEntity(); err != nil {
+	//	return err
+	//}
 
 	// generate configtx.yaml
 	global.Logger.Info("generate configtx.yaml...")
@@ -325,7 +334,8 @@ func (c *Channel) AddOrg(orgID int) error {
 	UpdateNets(*c)
 
 	// TODO
-	return org.CreateNodeEntity()
+	// return org.CreateNodeEntity()
+	return nil
 }
 
 func (c *Channel)UpdateAnchors(orgID int) error {

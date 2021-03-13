@@ -27,19 +27,17 @@ import (
 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"gopkg.in/yaml.v3"
-	"gorm.io/gorm"
 )
 
 type Network struct {
 	ID        int `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
 
 	Name          string        `json:"name" binding:"required"`
-	Orders        Orders        `json:"orders" binding:"required"`
-	Organizations Organizations `json:"organizations" binding:"required"`
-	Channels      Channels      `json:"channels"`
+	Orders        Orders        `json:"orders" binding:"required" gorm:"type:text"`
+	Organizations Organizations `json:"organizations" binding:"required" gorm:"type:text"`
+	Channels      Channels      `json:"channels" gorm:"type:text"`
 
 	Consensus  string `json:"consensus" binding:"required"`
 	TlsEnabled bool   `json:"tlsEnabled"`
@@ -101,6 +99,9 @@ func DeleteNetworkByID(id int) error {
 	if err := global.DB.Where("id = ?", id).Delete(&Network{}).Error; err != nil {
 		return errors.WithMessage(err, "Unable to delete network")
 	}
+	n, _ := GetNetworkfromNets(id)
+	n.RemoveAllEntity()
+	// n.RemoveAllFile()
 	delete(global.Nets, fmt.Sprintf("net%d", id))
 	delete(global.SDKs, fmt.Sprintf("net%d", id))
 	return nil
@@ -151,7 +152,7 @@ func (n *Network)Update() error {
 	}
 
 	n.UpdatedAt  = time.Now()
-	if err := global.DB.Model(&User{}).Where("id = ?", n.ID).Updates(n).Error; err != nil {
+	if err := global.DB.Model(&Network{}).Where("id = ?", n.ID).Updates(n).Error; err != nil {
 		return errors.WithMessage(err, "Fail to update")
 	}
 
@@ -170,7 +171,7 @@ func GetNetworkfromNets(networkID int) (*Network, error) {
 
 // Get basic Network for deploy
 // eg: GetBasicNetWork().Deploy()
-func GetBasicNetwork() *Network {
+func GetBasicNetwork(consensus string) *Network {
 	netID := 0
 	for k, _ := range global.Nets {
 		curID, _ := strconv.Atoi(k[3:])
@@ -185,11 +186,10 @@ func GetBasicNetwork() *Network {
 		Orders: []Order{},
 		Organizations: []Organization{},
 		Channels: []Channel{},
-		Consensus: "solo",
+		Consensus: consensus,
 		TlsEnabled: true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		DeletedAt: gorm.DeletedAt{},
 	}
 }
 
@@ -206,37 +206,24 @@ func (n *Network) Deploy() (err error) {
 
 	global.Logger.Info("Initialize the network, update the global variable Nets")
 	n.InitNetsForThisNet()
+	n.Insert()
 
-	ordererOrg := Organization{
-		ID: -1,
-		NetworkID: n.ID,
-		Name: "ordererorg",
-		MSPID: "ordererMSP",
-		Peers: []Peer{},
-		Users: []string{},
-	}
-	org1 := Organization{
-		ID: 1,
-		NetworkID: n.ID,
-		Name: "org1",
-		MSPID: "org1MSP",
-		Peers: []Peer{},
-		Users: []string{},
-	}
+	ordererOrg := GetBasicOrg(-1, n.ID)
+	org1 := GetBasicOrg(1, n.ID)
 	channel := Channel{
 		ID: 1,
 		Name: "channel1",
 		NetworkID: n.ID,
 		Organizations: Organizations{
-			ordererOrg,
-			org1,
+			*ordererOrg,
+			*org1,
 		},
 	}
 
 	// create tools resources
-	global.Logger.Info("Start the tools node")
+	//global.Logger.Info("Start the tools node")
 	tools := kubernetes.Tools{}
-	tools.Create()
+	//tools.Create()
 
 
 	// TODO: make it sync
@@ -311,6 +298,18 @@ func (n *Network) Deploy() (err error) {
 	return nil
 }
 
+func (n *Network) RemoveAllEntity() {
+	for _, org := range n.Organizations {
+		org.RemoveAllEntity()
+	}
+}
+
+func (n *Network) RemoveAllFile() {
+	if err := os.RemoveAll(filepath.Join(mConfig.LOCAL_BASE_PATH, fmt.Sprintf("net%d", n.ID))); err != nil {
+		global.Logger.Error("fail to remove all file", zap.Error(err))
+	}
+}
+
 func (n *Network) RenderConfigtx() error {
 	templ := template.Must(template.ParseFiles(path.Join(mConfig.LOCAL_MOUNT_PATH, "configtx.yaml.tpl")))
 
@@ -382,6 +381,9 @@ func UpdateNets(v interface{}) {
 	case Network:
 		global.Nets[fmt.Sprintf("net%d", non.ID)] = non
 		non.Show()
+		if err := non.Update(); err != nil {
+			global.Logger.Error("fail to update net to mysql", zap.Error(err))
+		}
 		//if err := non.UpdateSDK(); err != nil {
 		//	global.Logger.Error("fail to update sdk", zap.Error(err))
 		//}
@@ -415,7 +417,12 @@ func UpdateNets(v interface{}) {
 		cu := non
 		n := global.Nets[fmt.Sprintf("net%d", cu.NetworkID)].(Network)
 		if cu.Type == "peer" {
-			n.Organizations[cu.OrganizationID].Peers = append(n.Organizations[cu.OrganizationID].Peers, Peer{Name: cu.GetUsername()})
+			if cu.UserID - 1 == len(n.Organizations[cu.OrganizationID].Peers){
+				n.Organizations[cu.OrganizationID].Peers = append(n.Organizations[cu.OrganizationID].Peers, Peer{Name: cu.GetUsername()})
+			} else {
+				global.Logger.Info("The peer node already exists")
+			}
+
 			//peers := n.Organizations[cu.OrganizationID].Peers
 			//peers = append(peers, Peer{Name: cu.GetUsername()})
 		} else{
@@ -496,6 +503,10 @@ func (n *Network)Show() {
 // eg: GetSystemChannel(n.ID).AddOrderers()
 func (n *Network)AddOrderersToSystemChannel() error {
 	global.Logger.Info("Add Orderer to system-channel ...")
+	if n.Consensus == "solo" {
+		return errors.New("Does not support networks that use the solo protocol")
+	}
+
 	c, err := GetSystemChannel(n.ID)
 	if err != nil {
 		return err
@@ -512,6 +523,7 @@ func (n *Network)AddOrderersToSystemChannel() error {
 		Name: fmt.Sprintf("orderer%d.net%d.com", newOrdererID, n.ID),
 	}
 	n.Orders = append(n.Orders, newOrderer)
+	UpdateNets(*n)
 
 
 	UpdateSDK(n.ID)
@@ -629,6 +641,17 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	return nil
 }
 
+// AddOrg creates an organizational entity
+func (n *Network) AddOrg() error {
+	org := GetBasicOrg(len(n.Organizations), n.ID)
+	if err := org.CreateBasicOrganizationEntity(); err != nil {
+		return err
+	}
+	if err := org.CreateNodeEntity(); err != nil {
+		return err
+	}
+	return nil
+}
 
 
 // 给network中的自定义字段使用

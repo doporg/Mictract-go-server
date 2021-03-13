@@ -34,9 +34,14 @@ type Organizations []Organization
 func (orgs *Organizations) Scan(value interface{}) error {
 	return scan(&orgs, value)
 }
-
-func (orgs *Organizations) Value() (driver.Value, error) {
+func (orgs Organizations) Value() (driver.Value, error) {
 	return value(orgs)
+}
+func (org *Organization) Scan(value interface{}) error {
+	return scan(&org, value)
+}
+func (org Organization) Value() (driver.Value, error) {
+	return value(org)
 }
 
 func (org *Organization) GetMSPPath() string {
@@ -256,4 +261,44 @@ func (org *Organization) RemoveAllEntity() {
 			kubernetes.NewOrderer(user.NetworkID, user.UserID).Delete()
 		}
 	}
+}
+
+func (org *Organization)AddPeer() error {
+	if org.ID == -1 {
+		return errors.New("Just for peer, not orderer")
+	}
+
+	if err := UpdateSDK(org.NetworkID); err != nil {
+		return err
+	}
+
+	sdk, err := GetSDKByNetWorkID(org.NetworkID)
+	if err != nil {
+		return err
+	}
+
+	orgName := fmt.Sprintf("org%d", org.ID)
+	caURL := fmt.Sprintf("ca.org%d.net%d.com", org.ID, org.NetworkID)
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(caURL), mspclient.WithOrg(orgName))
+	if err != nil {
+		return err
+	}
+
+	newPeer := NewPeerCaUser(len(org.Peers) + 1, org.ID, org.NetworkID, "peer1pw")
+	if err := newPeer.Register(mspClient); err != nil {
+		return errors.WithMessage(err, "fail to regiester new Peer")
+	}
+
+	if err := newPeer.Enroll(mspClient, false); err != nil {
+		return err
+	}
+	if err := newPeer.Enroll(mspClient, true); err != nil {
+		return err
+	}
+
+	// org.Peers = append(org.Peers, Peer{Name: newPeer.GetUsername()})
+
+	kubernetes.NewPeer(newPeer.NetworkID, newPeer.OrganizationID, newPeer.UserID).Create()
+	return nil
 }

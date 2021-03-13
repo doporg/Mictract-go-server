@@ -1,11 +1,12 @@
 package api
 
 import (
+	"fmt"
+	"github.com/gin-gonic/gin"
 	"mictract/enum"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 )
@@ -16,21 +17,33 @@ import (
 // POST	/network
 // param: Network
 func CreateNetwork(c *gin.Context) {
-	var net model.Network
+	var info request.AddBasicNetwork
 
 	// check if request model contains some required fields.
-	if err := c.ShouldBindJSON(&net); err != nil {
+	if err := c.ShouldBindJSON(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
+	if info.Consensus != "solo" && info.Consensus != "etcdraft" {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("The consensus protocol only supports solo and etcdraft").
+			Result(c.JSON)
+	}
+
 	// TODO
 	// check if the network name has existed.
 	// check if the new network configuration could be saved.
-	net.Deploy()
+	net := model.GetBasicNetwork(info.Consensus)
+	if err := net.Deploy(); err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+	}
 
+	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
 		SetPayload(net).
 		Result(c.JSON)
@@ -45,7 +58,6 @@ func ListNetworks(c *gin.Context) {
 			Result(c.JSON)
 		return
 	}
-
 	if nets, err := model.FindNetworks(pageInfo); err != nil {
 		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -98,4 +110,110 @@ func DeleteNetwork(c *gin.Context) {
 		response.Ok().
 			Result(c.JSON)
 	}
+}
+
+// POST /network/addOrg
+func AddOrg(c *gin.Context) {
+	var info request.AddOrgReq
+	if err := c.ShouldBindJSON(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(info.NetID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	if err := net.AddOrg(); err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, _ = model.GetNetworkfromNets(net.ID)
+
+	response.Ok().
+		SetPayload(net).
+		Result(c.JSON)
+
+}
+
+// POST /network/addPeer
+func AddPeer(c *gin.Context) {
+	var info request.AddPeerReq
+	if err := c.ShouldBindJSON(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(info.NetID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	if info.OrgID <= 0 || info.OrgID > len(net.Organizations) {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage(fmt.Sprintf("org%d does not exist", info.OrgID)).
+			Result(c.JSON)
+		return
+	}
+
+	for i := 0; i < info.Num; i++ {
+		if err := net.Organizations[info.OrgID].AddPeer(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+	}
+
+	net, _ = model.GetNetworkfromNets(net.ID)
+	response.Ok().
+		SetPayload(net).
+		Result(c.JSON)
+}
+
+// POST /network/addOrderer
+func AddOrderer(c *gin.Context) {
+	var info request.AddOrdererReq
+	if err := c.ShouldBindJSON(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(info.NetID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	for i := 0; i < info.Num; i++ {
+		if err := net.AddOrderersToSystemChannel(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+	}
+
+	net, _ = model.GetNetworkfromNets(net.ID)
+	response.Ok().
+		SetPayload(net).
+		Result(c.JSON)
 }

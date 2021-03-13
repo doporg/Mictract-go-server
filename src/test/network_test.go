@@ -10,6 +10,7 @@ import (
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/kubernetes"
+	"mictract/model/request"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ var testNet = model.Network{
 	Consensus:  "solo",
 	TlsEnabled: true,
 }
-/*
+
 func TestCreateNetwork(t *testing.T) {
 	tests := []struct {
 		Net  model.Network
@@ -66,10 +67,10 @@ func TestListNetworks(t *testing.T) {
 	fmt.Println(w.Body.String())
 	assert.Equal(t, 200, w.Code)
 }
-*/
+
 func TestDeployNetwork(t *testing.T) {
 	var err error
-	if err = model.GetBasicNetwork().Deploy(); err != nil {
+	if err = model.GetBasicNetwork("solo").Deploy(); err != nil {
 		global.Logger.Error("testing", zap.Error(err))
 	}
 

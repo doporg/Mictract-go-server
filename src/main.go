@@ -2,13 +2,17 @@ package main
 
 import (
 	"github.com/fvbock/endless"
-	"mictract/global"
-	_ "mictract/init"
+	ii "mictract/init"
 	"mictract/router"
 )
 
 func main() {
-	defer global.Close()
+	//(&kubernetes.Tools{}).Create()
+	//(&kubernetes.Mysql{}).Create()
+	//
+	//time.Sleep(20 * time.Second)
+	defer ii.Close()
+	// TODO: start mysql and tools
 	r := router.GetRouter()
 	s := endless.NewServer("0.0.0.0:8080", r)
 

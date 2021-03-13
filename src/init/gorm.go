@@ -15,6 +15,8 @@ func createTables() {
 		model.Network{},
 	)
 
+
+
 	if err != nil {
 		global.Logger.Error("create tables failed", zap.Error(err))
 	} else {
@@ -25,11 +27,11 @@ func createTables() {
 func initNetsAndSDKs() {
 	nets, err := model.QueryAllNetwork()
 	if err != nil {
-		global.Logger.Error("fail to get all network from db")
+		global.Logger.Error("fail to get all network from db", zap.Error(err))
 	}
 	for _, net := range nets {
 		model.UpdateNets(net)
-		model.UpdateSDK(net.ID)
+		// model.UpdateSDK(net.ID)
 	}
 }
 

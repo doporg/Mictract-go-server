@@ -18,8 +18,16 @@ func (orderers *Orders) Scan(value interface{}) error {
 	return scan(&orderers, value)
 }
 
-func (orderers *Orders) Value() (driver.Value, error) {
+func (orderers Orders) Value() (driver.Value, error) {
 	return value(orderers)
+}
+
+func (orderer *Order) Scan(value interface{}) error {
+	return scan(&orderer, value)
+}
+
+func (orderer Order) Value() (driver.Value, error) {
+	return value(orderer)
 }
 
 func (orderer *Order)getURL() string {

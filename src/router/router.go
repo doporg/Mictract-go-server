@@ -15,6 +15,16 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.GET("/", api.ListNetworks)
 		NetworkRouter.DELETE("/:id", api.DeleteNetwork)
 		NetworkRouter.GET("/:id", api.GetNetwork)
+
+		NetworkRouter.POST("/addOrg", api.AddOrg)
+		NetworkRouter.POST("/addPeer", api.AddPeer)
+		NetworkRouter.POST("/addOrderer", api.AddOrderer)
+	}
+
+	MysqlRouter := router.Group("mysql")
+	{
+		MysqlRouter.POST("/", api.CreateMysql)
+		MysqlRouter.DELETE("/", api.RemoveMysql)
 	}
 
 	return

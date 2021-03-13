@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
+
+	_ "mictract/init"
 )
 
 var R = router.GetRouter()
