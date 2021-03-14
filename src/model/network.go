@@ -215,8 +215,11 @@ func (n *Network) Deploy() (err error) {
 		Name: "channel1",
 		NetworkID: n.ID,
 		Organizations: Organizations{
-			*ordererOrg,
+			//*ordererOrg,
 			*org1,
+		},
+		Orderers: []Order {
+			{fmt.Sprintf("orderer1.net%d.com", n.ID)},
 		},
 	}
 
@@ -650,6 +653,71 @@ func (n *Network) AddOrg() error {
 	if err := org.CreateNodeEntity(); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (n *Network) AddChannel(orgIDs []int) error {
+	channel := Channel{
+		ID: len(n.Channels) + 1,
+		Name: fmt.Sprintf("channel%d", len(n.Channels) + 1),
+		NetworkID: n.ID,
+		Organizations: []Organization{},
+		Orderers: []Order{n.Orders[0]},
+	}
+
+	orgNum := len(n.Organizations) - 1
+	for _, id := range orgIDs {
+		if id < 1 || id > orgNum {
+			return errors.New(fmt.Sprintf("org%d does not exist in the network", id))
+		}
+	}
+	channel.Organizations = append(channel.Organizations, n.Organizations[orgIDs[0]])
+
+
+	if err := channel.RenderConfigtx(); err != nil {
+		return errors.WithMessage(err, "fail to render configtx.yaml")
+	}
+
+	tools := kubernetes.Tools{}
+	global.Logger.Info("generate a default channel")
+	_, _, err := tools.ExecCommand("configtxgen",
+		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
+		"-profile", "NewChannel",
+		"-channelID", fmt.Sprintf("channel%d", channel.ID),
+		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel%d.tx", n.ID, channel.ID),
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := channel.CreateChannel(n.Orders[0].Name); err != nil {
+		return err
+	}
+
+	for _, peer := range channel.Organizations[0].Peers {
+		peer.JoinChannel(fmt.Sprintf("channel%d", channel.ID), channel.Orderers[0].Name)
+	}
+
+	for i := 1; i < len(orgIDs); i++ {
+		global.Logger.Info(fmt.Sprintf("add org%d to channel%d", orgIDs[i], channel.ID))
+		if err := channel.AddOrg(orgIDs[i]); err != nil {
+			return err
+		}
+	}
+
+	c, err := GetChannelFromNets(channel.ID, channel.NetworkID)
+	if err != nil {
+		global.Logger.Error("fail to get channel ", zap.Error(err))
+	}
+	for i := 1; i < len(channel.Organizations); i++ {
+		org := channel.Organizations[i]
+		for _, peer := range org.Peers {
+			if err := peer.JoinChannel(fmt.Sprintf("channel%d", c.ID), c.Orderers[0].Name); err != nil {
+				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.Name, c.ID))
+			}
+		}
+	}
+
 	return nil
 }
 

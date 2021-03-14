@@ -217,3 +217,34 @@ func AddOrderer(c *gin.Context) {
 		SetPayload(net).
 		Result(c.JSON)
 }
+
+// POST /network/addChannel
+func AddChannel(c *gin.Context) {
+	var info request.AddChannelReq
+	if err := c.ShouldBindJSON(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(info.NetID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	if err := net.AddChannel(info.OrgIDs); err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, _ = model.GetNetworkfromNets(net.ID)
+	response.Ok().
+		SetPayload(net).
+		Result(c.JSON)
+}

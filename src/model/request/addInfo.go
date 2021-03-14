@@ -19,4 +19,8 @@ type AddPeerReq struct {
 	Num 	int `json:"num" binding:"required"`
 }
 
+type AddChannelReq struct {
+	NetID 	int 	`json:"netid" binding:"required"`
+	OrgIDs	[]int	`json:"orgids" binding:"required"`
+}
 

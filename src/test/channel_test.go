@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	_ "mictract/init"
 )
 
 //
@@ -121,7 +123,7 @@ func TestWithUser(t *testing.T) {
 }
 
 func TestGetChannelConfig(t *testing.T)  {
-	model.UpdateNets(n)
+	// model.UpdateNets(n)
 	net, _:= model.GetNetworkfromNets(1)
 	channel := net.Channels[0]
 

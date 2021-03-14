@@ -30,7 +30,7 @@ WIP now.
    x.x.x.x             nfs-server
    ```
 
-5. put your k8s config and `template/configtx.yaml.tpl` and `scripts` on `config.NFS_EXPOSED_PATH`, your `kube-config.yaml` should be like this:
+5. put your k8s config and `template/configtx.yaml.tpl` and `template/channel.yaml.tpl` and `scripts` on `config.NFS_EXPOSED_PATH`, your `kube-config.yaml` should be like this:
    
    Note: the `certificate-authority-data` and `client-key-data` are base64 encoded.
    
@@ -62,7 +62,8 @@ WIP now.
    ```text
    mictract
    ├── configtx.yaml.tpl
-   └── kube-config.yaml
+   ├── channel.yaml.tpl
+   ├── kube-config.yaml
    └── scripts
    ```
 

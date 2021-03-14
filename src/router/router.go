@@ -19,6 +19,7 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.POST("/addOrg", api.AddOrg)
 		NetworkRouter.POST("/addPeer", api.AddPeer)
 		NetworkRouter.POST("/addOrderer", api.AddOrderer)
+		NetworkRouter.POST("/addChannel", api.AddChannel)
 	}
 
 	MysqlRouter := router.Group("mysql")

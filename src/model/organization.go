@@ -192,8 +192,8 @@ func (org *Organization)CreateBasicOrganizationEntity() error {
 	// register users of this organization
 	global.Logger.Info("Registering users...")
 	users := []*CaUser{
-		NewUserCaUser(1, org.ID, org.NetworkID, "user1pw"),
 		NewAdminCaUser(1, org.ID, org.NetworkID, "admin1pw"),
+		NewUserCaUser(1, org.ID, org.NetworkID, "user1pw"),
 		// NewPeerCaUser(1, org.ID, org.NetworkID, "peer1pw"),
 	}
 	if org.ID == -1 {

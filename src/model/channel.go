@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"mictract/model/kubernetes"
+	"path"
+	"text/template"
 
 	"mictract/config"
 	"mictract/global"
@@ -46,6 +48,26 @@ func (channel *Channel) Scan(value interface{}) error {
 
 func (channel Channel) Value() (driver.Value, error) {
 	return value(channel)
+}
+
+// 防止传进来的channel对象不完整，比如更新组织对象时没有无法更新到channel对象，
+// 所以从Nets中重新构造一个channel，保证信息最新
+func GetChannelFromNets(channelID int, netID int) (*Channel, error) {
+	net, err := GetNetworkfromNets(netID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(net.Channels) < channelID {
+		return nil, errors.New("The channel does not exist in the network")
+	}
+
+
+	ret := net.Channels[channelID - 1]
+	for i, org := range net.Channels[channelID - 1].Organizations {
+		ret.Organizations[i] = net.Organizations[org.ID]
+	}
+	return &ret, nil
 }
 
 func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, error) {
@@ -125,7 +147,7 @@ func (c *Channel)CreateChannel(ordererURL string) error {
 		SigningIdentities: adminIdentitys,
 	}
 
-	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@org1.net%d.com", n.ID)), fabsdk.WithOrg("org1"))
+	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@org%d.net%d.com", c.Organizations[0].ID, n.ID)), fabsdk.WithOrg(fmt.Sprintf("org%d", c.Organizations[0].ID)))
 	rc, err := resmgmt.New(rcp)
 	if err != nil {
 		return errors.WithMessage(err, "fail to get rc ")
@@ -184,6 +206,7 @@ func (c *Channel) GetChannelConfig() ([]byte, error) {
 	if c.ID == -1 {
 		return nil, errors.New("please call GetSysChannelConfig")
 	}
+	fmt.Println(c.Organizations[0].Users[0], c.Organizations[0].ID)
 	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get ledgerClient")
@@ -498,4 +521,22 @@ func (c *Channel)AddOrderers(orderer Order) error {
 
 	// update org_update_in_envelope.pb
 	return c.updateConfig(signs)
+}
+
+// 渲染一个通道，只包含通道中第一个org
+func (c *Channel) RenderConfigtx() error {
+	templ := template.Must(template.ParseFiles(path.Join(config.LOCAL_MOUNT_PATH, "channel.yaml.tpl")))
+
+	filename := fmt.Sprintf("/mictract/networks/net%d/configtx.yaml", c.NetworkID)
+	writer, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	if err := templ.Execute(writer, c.Organizations[0]); err != nil {
+		return err
+	}
+
+	return nil
 }
