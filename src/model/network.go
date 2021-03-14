@@ -519,11 +519,11 @@ func (n *Network)AddOrderersToSystemChannel() error {
 	}
 
 	newOrdererID := len(n.Orders) + 1
-	newOrderer := Order{
-		Name: fmt.Sprintf("orderer%d.net%d.com", newOrdererID, n.ID),
-	}
-	n.Orders = append(n.Orders, newOrderer)
-	UpdateNets(*n)
+	//newOrderer := Order{
+	//	Name: fmt.Sprintf("orderer%d.net%d.com", newOrdererID, n.ID),
+	//}
+	//n.Orders = append(n.Orders, newOrderer)
+	//UpdateNets(*n)
 
 
 	UpdateSDK(n.ID)
