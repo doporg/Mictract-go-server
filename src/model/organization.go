@@ -263,9 +263,25 @@ func (org *Organization) RemoveAllEntity() {
 	}
 }
 
-func (org *Organization)AddPeer() error {
-	if org.ID == -1 {
+func GetOrgFromNets(orgID, netID int) (Organization, error) {
+	net, err := GetNetworkfromNets(netID)
+	if err != nil {
+		return Organization{}, err
+	}
+	if orgID <= 0 || orgID + 1 > len(net.Organizations) {
+		return Organization{}, errors.New("Can't find the org")
+	}
+	return net.Organizations[orgID], nil
+}
+
+func (o *Organization)AddPeer() error {
+	if o.ID == -1 {
 		return errors.New("Just for peer, not orderer")
+	}
+
+	org, err := GetOrgFromNets(o.ID, o.NetworkID)
+	if err != nil {
+		return err
 	}
 
 	if err := UpdateSDK(org.NetworkID); err != nil {

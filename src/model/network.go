@@ -504,8 +504,14 @@ func (n *Network)Show() {
 
 // AddOrderers
 // eg: GetSystemChannel(n.ID).AddOrderers()
-func (n *Network)AddOrderersToSystemChannel() error {
+func (net *Network)AddOrderersToSystemChannel() error {
 	global.Logger.Info("Add Orderer to system-channel ...")
+
+	n, err := GetNetworkfromNets(net.ID)
+	if err != nil {
+		return err
+	}
+
 	if n.Consensus == "solo" {
 		return errors.New("Does not support networks that use the solo protocol")
 	}
@@ -646,7 +652,11 @@ func (n *Network)AddOrderersToSystemChannel() error {
 
 // AddOrg creates an organizational entity
 func (n *Network) AddOrg() error {
-	org := GetBasicOrg(len(n.Organizations), n.ID)
+	net, err := GetNetworkfromNets(n.ID)
+	if err != nil {
+		return err
+	}
+	org := GetBasicOrg(len(net.Organizations), net.ID)
 	if err := org.CreateBasicOrganizationEntity(); err != nil {
 		return err
 	}

@@ -17,7 +17,7 @@ import (
 // POST	/network
 // param: AddBasicNetwork
 func CreateNetwork(c *gin.Context) {
-	var info request.AddBasicNetwork
+	var info request.AddNetwork
 
 	// check if request model contains some required fields.
 	if err := c.ShouldBindJSON(&info); err != nil {
@@ -27,10 +27,29 @@ func CreateNetwork(c *gin.Context) {
 		return
 	}
 
+	fmt.Println(info)
+
 	if info.Consensus != "solo" && info.Consensus != "etcdraft" {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage("The consensus protocol only supports solo and etcdraft").
 			Result(c.JSON)
+		return
+	}
+
+	for _, val := range info.Orgs {
+		if val < 1 {
+			response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+				SetMessage("Every organization (including ordererorg) contains at least one node").
+				Result(c.JSON)
+			return
+		}
+	}
+
+	if len(info.Orgs) < 2 {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("The network contains at least one orderer and one peer").
+			Result(c.JSON)
+		return
 	}
 
 	// TODO
@@ -41,6 +60,39 @@ func CreateNetwork(c *gin.Context) {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
+		return
+	}
+
+	for i := 2; i < len(info.Orgs); i++ {
+		if err := net.AddOrg(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+	}
+
+	// add rest peer
+	for j := 1; j < len(info.Orgs); j++ {
+		for i := 0; i < info.Orgs[j] - 1; i++ {
+			net, _ = model.GetNetworkfromNets(net.ID)
+			if err := net.Organizations[j].AddPeer(); err != nil {
+				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+					SetMessage(err.Error()).
+					Result(c.JSON)
+				return
+			}
+		}
+	}
+
+	// add rest orderer
+	for i := 1; i < info.Orgs[0]; i++ {
+		if err := net.AddOrderersToSystemChannel(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
 	}
 
 	net, _ = model.GetNetworkfromNets(net.ID)

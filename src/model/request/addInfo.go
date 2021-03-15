@@ -1,6 +1,8 @@
 package request
 
-type AddBasicNetwork struct {
+type AddNetwork struct {
+	// orgs[0] 个Orderer, org1 有 Orgs[1] 个peer
+	Orgs         []int `json:"orgs" binding:"required"`
 	Consensus	string `json:"consensus" binding:"required"`
 }
 
