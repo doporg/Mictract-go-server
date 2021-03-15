@@ -464,9 +464,17 @@ func (cu *CaUser) GetPrivateKey() string {
 }
 
 func (cu *CaUser) Register(mspClient *msp.Client) error {
+	// BUG!!!
+	// 用户类型有orderer、peer、admin、client，没有user
+	cuType := cu.Type
+	if cuType == "user" {
+		cuType = "client"
+	}
+	// BUG!!!
+
 	request := &msp.RegistrationRequest{
 		Name:   cu.GetUsername(),
-		Type:   cu.Type,
+		Type:   cuType,
 		Secret: cu.Password,
 	}
 
