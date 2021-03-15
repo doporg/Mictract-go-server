@@ -6,6 +6,7 @@ const (
 	CodeErrNotFound
 	CodeErrBadArgument
 	CodeErrDB
+	CodeErrBlockchainNetworkError
 )
 
 var CodeMessage = map[int]string {
@@ -14,4 +15,5 @@ var CodeMessage = map[int]string {
 	CodeErrNotFound: 		"object not found",
 	CodeErrBadArgument: 	"bad argument",
 	CodeErrDB: 				"database error",
+	CodeErrBlockchainNetworkError: "BlockchainNetworkError",
 }

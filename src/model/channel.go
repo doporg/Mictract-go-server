@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/base64"
 	"fmt"
+	"github.com/hyperledger/fabric-protos-go/common"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"go.uber.org/zap"
 	"mictract/model/kubernetes"
 	"path"
@@ -58,7 +60,10 @@ func GetChannelFromNets(channelID int, netID int) (*Channel, error) {
 		return nil, err
 	}
 
-	if len(net.Channels) < channelID {
+	if channelID == -1 {
+		return nil, errors.New("Does not support system-channel, please call GetSystemChannel")
+	}
+	if len(net.Channels) < channelID || channelID < -1 || channelID == 0{
 		return nil, errors.New("The channel does not exist in the network")
 	}
 
@@ -222,6 +227,46 @@ func (c *Channel) GetChannelConfig() ([]byte, error) {
 	//fmt.Println(cfg.Metadata)
 
 	return proto.Marshal(cfg)
+}
+
+// Don't use for system-channel
+func (c *Channel) GetChannelInfo() (*fab.BlockchainInfoResponse, error) {
+	if len(c.Organizations) < 1 {
+		return &fab.BlockchainInfoResponse{}, errors.New("No organization in the channel")
+	}
+	if len(c.Organizations[0].Peers) < 1 {
+		return &fab.BlockchainInfoResponse{}, errors.New("No peer in the organization")
+	}
+	if (len(c.Organizations[0].Users) < 1) {
+		return &fab.BlockchainInfoResponse{}, errors.New("No user in the organization")
+	}
+
+	lc, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+	if err != nil {
+		return &fab.BlockchainInfoResponse{}, err
+	}
+
+	return lc.QueryInfo(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
+}
+
+// Don't use for system-channel
+func (c *Channel) GetBlock(blockID uint64) (*common.Block, error) {
+	if len(c.Organizations) < 1 {
+		return &common.Block{}, errors.New("No organization in the channel")
+	}
+	if len(c.Organizations[0].Peers) < 1 {
+		return &common.Block{}, errors.New("No peer in the organization")
+	}
+	if (len(c.Organizations[0].Users) < 1) {
+		return &common.Block{}, errors.New("No user in the organization")
+	}
+
+	lc, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+	if err != nil {
+		return &common.Block{}, err
+	}
+
+	return lc.QueryBlock(blockID, ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
 }
 
 func (c *Channel)getAndStoreConfig() error {
