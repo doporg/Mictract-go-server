@@ -128,6 +128,15 @@ func NewCaUserFromDomainNameWithPassword(domain, password string) *CaUser {
 		assignIdByOrder(&cu.UserID, &cu.NetworkID)
 		cu.OrganizationID = -1
 
+	default:
+		// enhance
+		// match: org1.net1.com
+		// match: net1.com
+		if strings.Contains(domain, "org") {
+			assignIdByOrder(&cu.OrganizationID, &cu.NetworkID)
+		} else {
+			assignIdByOrder(&cu.NetworkID)
+		}
 	}
 
 	cu.Password = password
