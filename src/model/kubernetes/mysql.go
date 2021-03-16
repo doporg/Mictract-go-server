@@ -30,7 +30,7 @@ func (m *Mysql) GetName() string {
 func (m *Mysql) GetSelector() map[string]string {
 	return map[string]string{
 		"app": "mictract",
-		"tier": "mysql",
+		"tier": "database",
 	}
 }
 
@@ -47,7 +47,7 @@ func (m *Mysql) CreateConfigMap() {
 			Name: name + "-env",
 		},
 		Data:	map[string]string{
-			"MYSQL_ROOT_PASSWORD": config.MYSQL_PW,
+			"MYSQL_ROOT_PASSWORD": config.DB_PW,
 		},
 	}
 
