@@ -93,6 +93,10 @@ WIP now.
 4. run dlv when you need to *debug*.
    ```shell
    dlv debug --headless --listen=:2345 --api-version=2 --accept-multiclient
+   
+   // Or you just want simplest unit test on a function:
+   cd src/test
+   go test * -test.run TestListNetworks -v
    ```
-   Or, when you need to *run* it, `go run src/main.go` via ssh terminal directly. 
+   Or, when you need to *run* it, `go run main.go` via ssh terminal directly. 
 
