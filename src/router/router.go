@@ -30,6 +30,13 @@ func GetRouter() (router *gin.Engine) {
 		OrganizationRouter.GET("/", api.ListOrganizations)
 	}
 
+	UserRouter := APIRoute.Group("user")
+	{
+		UserRouter.POST("/", api.CreateUser)
+		UserRouter.GET("/", api.ListUsers)
+		UserRouter.DELETE("/", api.DeleteUser)
+	}
+
 	PeerRouter := APIRoute.Group("peer")
 	{
 		PeerRouter.POST("/", api.AddPeer)

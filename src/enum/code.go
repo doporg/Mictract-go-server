@@ -7,6 +7,7 @@ const (
 	CodeErrBadArgument
 	CodeErrDB
 	CodeErrBlockchainNetworkError
+	CodeErrCA
 )
 
 var CodeMessage = map[int]string {
@@ -16,4 +17,5 @@ var CodeMessage = map[int]string {
 	CodeErrBadArgument: 	"bad argument",
 	CodeErrDB: 				"database error",
 	CodeErrBlockchainNetworkError: "BlockchainNetworkError",
+	CodeErrCA: "CA error",
 }

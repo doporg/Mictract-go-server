@@ -545,3 +545,17 @@ func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 
 	return nil
 }
+
+func (cu *CaUser) Revoke(mspClient *msp.Client) error {
+
+	req := &msp.RevocationRequest{
+		Name: cu.GetUsername(),
+		Reason: "Marx bless, no bugs",
+	}
+
+	_, err := mspClient.Revoke(req)
+	if err != nil {
+		return errors.WithMessage(err, "fail to revoke " + cu.GetUsername())
+	}
+	return nil
+}
