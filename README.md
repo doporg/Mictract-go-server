@@ -24,11 +24,26 @@ WIP now.
    systemctl enable --now nfs-server
    ```
 
-4. add hosts for NFS server, or edit `config.NFS_SERVER_URL`.
+4. add hosts for NFS server in `/etc/hosts`, or edit `config.NFS_SERVER_URL`.
 
    ```
    x.x.x.x             nfs-server
    ```
+   
+5. configure database:
+   1. add hosts for database server in `/etc/hosts`, or edit `config.DB_SERVER_URL`.
+      ```
+      x.x.x.x              db-server
+      ```
+      
+   2. then, start your mysql database. 
+      For example, use [mysql](https://hub.docker.com/_/mysql) on docker:
+      ``` 
+      docker run --name mic-mysql -e MYSQL_ROOT_PASSWORD=123456 -p 3306:3306 -d mysql:8
+      ```
+      
+   3. expose external database service into k8s.
+      Edit `k8s/mysql-svc.yaml` and `k apply -f k8s/mysql-svc.yaml`.
 
 5. put your k8s config and `template/configtx.yaml.tpl` and `template/channel.yaml.tpl` and `scripts` on `config.NFS_EXPOSED_PATH`, your `kube-config.yaml` should be like this:
    
