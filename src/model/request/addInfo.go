@@ -1,9 +1,15 @@
 package request
 
-type AddNetwork struct {
-	// orgs[0] 个Orderer, org1 有 Orgs[1] 个peer
-	Orgs         []int `json:"orgs" binding:"required"`
+//type AddNetwork struct {
+//	// orgs[0] 个Orderer, org1 有 Orgs[1] 个peer
+//	Orgs         []int `json:"orgs" binding:"required"`
+//	Consensus	string `json:"consensus" binding:"required"`
+//}
+type AddNetworkReq struct {
 	Consensus	string `json:"consensus" binding:"required"`
+	OrdererCount int 	`json:"ordererCount" binding:"required"`
+	PeerCounts	[]int	`json:"peerCounts" binding:"required"`
+	TlsEnabled	bool	`json:"tlsEnalbed"`
 }
 
 type AddOrgReq struct {

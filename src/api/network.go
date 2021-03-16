@@ -17,7 +17,7 @@ import (
 // POST	/network
 // param: AddBasicNetwork
 func CreateNetwork(c *gin.Context) {
-	var info request.AddNetwork
+	var info request.AddNetworkReq
 
 	// check if request model contains some required fields.
 	if err := c.ShouldBindJSON(&info); err != nil {
@@ -36,7 +36,20 @@ func CreateNetwork(c *gin.Context) {
 		return
 	}
 
-	for _, val := range info.Orgs {
+	if info.Consensus == "solo" && info.OrdererCount > 1 {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("The solo consensus only supports one orderer").
+			Result(c.JSON)
+		return
+	}
+
+	if info.OrdererCount < 1 {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("Every organization (including ordererorg) contains at least one node").
+			Result(c.JSON)
+		return
+	}
+	for _, val := range info.PeerCounts {
 		if val < 1 {
 			response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 				SetMessage("Every organization (including ordererorg) contains at least one node").
@@ -45,9 +58,9 @@ func CreateNetwork(c *gin.Context) {
 		}
 	}
 
-	if len(info.Orgs) < 2 {
+	if len(info.PeerCounts) < 1 {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("The network contains at least one orderer and one peer").
+			SetMessage("The network contains at least one org").
 			Result(c.JSON)
 		return
 	}
@@ -63,7 +76,8 @@ func CreateNetwork(c *gin.Context) {
 		return
 	}
 
-	for i := 2; i < len(info.Orgs); i++ {
+	// add rest org
+	for i := 1; i < len(info.PeerCounts); i++ {
 		if err := net.AddOrg(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
@@ -73,10 +87,10 @@ func CreateNetwork(c *gin.Context) {
 	}
 
 	// add rest peer
-	for j := 1; j < len(info.Orgs); j++ {
-		for i := 0; i < info.Orgs[j] - 1; i++ {
+	for j := 0; j < len(info.PeerCounts); j++ {
+		for i := 0; i < info.PeerCounts[j] - 1; i++ {
 			net, _ = model.GetNetworkfromNets(net.ID)
-			if err := net.Organizations[j].AddPeer(); err != nil {
+			if err := net.Organizations[j + 1].AddPeer(); err != nil {
 				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 					SetMessage(err.Error()).
 					Result(c.JSON)
@@ -86,7 +100,7 @@ func CreateNetwork(c *gin.Context) {
 	}
 
 	// add rest orderer
-	for i := 1; i < info.Orgs[0]; i++ {
+	for i := 1; i < info.OrdererCount; i++ {
 		if err := net.AddOrderersToSystemChannel(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
@@ -105,7 +119,7 @@ func CreateNetwork(c *gin.Context) {
 // param: PageInfo
 func ListNetworks(c *gin.Context) {
 	var pageInfo request.PageInfo
-	if err := c.ShouldBindJSON(&pageInfo); err != nil {
+	if err := c.ShouldBindQuery(&pageInfo); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
@@ -144,16 +158,21 @@ func GetNetwork(c *gin.Context) {
 	}
 }
 
-// DELETE	/network/:id
+// DELETE	/network/
 func DeleteNetwork(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	// id, err := strconv.Atoi(c.Param("id"))
+	req := struct {
+		URL string `json:"url" binding:"required"`
+	}{}
 
-	if err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
+
+	id := model.NewCaUserFromDomainName(req.URL).NetworkID
 
 	if err := model.DeleteNetworkByID(id); err != nil {
 		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
