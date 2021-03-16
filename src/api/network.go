@@ -118,14 +118,14 @@ func CreateNetwork(c *gin.Context) {
 // GET	/network
 // param: PageInfo
 func ListNetworks(c *gin.Context) {
-	var pageInfo request.PageInfo
-	if err := c.ShouldBindQuery(&pageInfo); err != nil {
-		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	if nets, err := model.FindNetworks(pageInfo); err != nil {
+	//var pageInfo request.PageInfo
+	//if err := c.ShouldBindQuery(&pageInfo); err != nil {
+	//	response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+	//		SetMessage(err.Error()).
+	//		Result(c.JSON)
+	//	return
+	//}
+	if nets, err := model.QueryAllNetwork(); err != nil {
 		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
