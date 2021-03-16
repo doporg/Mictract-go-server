@@ -47,7 +47,7 @@ func (m *Mysql) CreateConfigMap() {
 			Name: name + "-env",
 		},
 		Data:	map[string]string{
-			"MYSQL_ROOT_PASSWORD": config.MYSQL_PW,
+			"MYSQL_ROOT_PASSWORD": config.DB_PW,
 		},
 	}
 

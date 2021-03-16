@@ -24,5 +24,6 @@ var (
 
 	SDK_LEVEL			= "debug"
 
-	MYSQL_PW			= "123456"
+	DB_SERVER_URL		= "db-server"
+	DB_PW         		= "123456"
 )

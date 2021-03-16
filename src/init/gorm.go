@@ -16,8 +16,8 @@ import (
 
 func initDB() {
 	mysqlConfig := mysql.Config{
-		// DSN: "root:123456@tcp(127.0.0.1:3306)/gorm?charset=utf8&parseTime=True&loc=Local",
-		DSN: fmt.Sprintf("root:%s@tcp(mysql:3306)/gorm?charset=utf8&parseTime=True&loc=Local", config.MYSQL_PW),
+		DSN: fmt.Sprintf("root:%s@tcp(%s:3306)/gorm?charset=utf8&parseTime=True&loc=Local",
+			config.DB_PW, config.DB_SERVER_URL),
 	}
 
 	var err error
