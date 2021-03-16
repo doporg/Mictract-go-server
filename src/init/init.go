@@ -9,17 +9,21 @@ import (
 
 func init() {
 	// initialization code goes here.
+
 	(&kubernetes.Tools{}).Create()
 	(&kubernetes.Mysql{}).Create()
 	// TODO: sync
-	time.Sleep(5 * time.Second)
+	time.Sleep(30 * time.Second)
 
+	initDB()
 	createTables()
 	initNetsAndSDKs()
 }
 
 func Close() {
 	model.UpsertAllNets()
+
+	closeDB()
 
 	(&kubernetes.Tools{}).Delete()
 	(&kubernetes.Mysql{}).Delete()

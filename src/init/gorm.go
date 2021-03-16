@@ -2,12 +2,34 @@ package init
 
 // If you want to initialize gorm, uncomment the code below.
 
+
+
 import (
+	"fmt"
+	"go.uber.org/zap"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"mictract/config"
 	"mictract/global"
 	"mictract/model"
-
-	"go.uber.org/zap"
 )
+
+func initDB() {
+	mysqlConfig := mysql.Config{
+		// DSN: "root:123456@tcp(127.0.0.1:3306)/gorm?charset=utf8&parseTime=True&loc=Local",
+		DSN: fmt.Sprintf("root:%s@tcp(mysql:3306)/gorm?charset=utf8&parseTime=True&loc=Local", config.MYSQL_PW),
+	}
+
+	var err error
+	if global.DB, err = gorm.Open(mysql.New(mysqlConfig), &gorm.Config{}); err != nil {
+		global.Logger.Error("Get database error", zap.Error(err))
+	}
+}
+
+func closeDB() {
+	db, _ := global.DB.DB()
+	_ = db.Close()
+}
 
 func createTables() {
 	err := global.DB.AutoMigrate(

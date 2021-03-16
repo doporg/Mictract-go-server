@@ -28,15 +28,14 @@ var (
 	k8sInformerStopCh	chan struct{}
 )
 
+// call by pkg init
 func init() {
 	initLogger()
-	initDB()
 	initK8s()
 	initSDKs()
 }
 
 func Close() {
-	closeDB()
 	//closeK8sInformer()
 	closeSDKs()
 }
