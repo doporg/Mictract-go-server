@@ -1,9 +1,8 @@
 package router
 
 import (
-	"mictract/api"
-
 	"github.com/gin-gonic/gin"
+	"mictract/api"
 )
 
 func GetRouter() (router *gin.Engine) {
@@ -16,7 +15,7 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.DELETE("/:id", api.DeleteNetwork)
 		NetworkRouter.GET("/:id", api.GetNetwork)
 
-		NetworkRouter.POST("/addOrg", api.AddOrg)
+		//NetworkRouter.POST("/addOrg", api.AddOrg)
 		NetworkRouter.POST("/addPeer", api.AddPeer)
 		NetworkRouter.POST("/addOrderer", api.AddOrderer)
 		// NetworkRouter.POST("/addChannel", api.AddChannel)
@@ -28,15 +27,24 @@ func GetRouter() (router *gin.Engine) {
 		ChannelRouter.GET("/", api.GetChannelInfo)
 	}
 
+	OrganizationRouter := router.Group("organization")
+	{
+		OrganizationRouter.POST("/", api.AddOrg)
+	}
+
+	PeerRouter := router.Group("peer")
+	{
+		PeerRouter.POST("/", api.AddPeer)
+	}
+
+	OrdererRouter := router.Group("orderer")
+	{
+		OrdererRouter.POST("/", api.AddOrderer)
+	}
+
 	BlockRouter := router.Group("block")
 	{
 		BlockRouter.GET("/", api.GetBlockByBlockID)
-	}
-
-	MysqlRouter := router.Group("mysql")
-	{
-		MysqlRouter.POST("/", api.CreateMysql)
-		MysqlRouter.DELETE("/", api.RemoveMysql)
 	}
 
 	return
