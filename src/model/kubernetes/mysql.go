@@ -30,7 +30,7 @@ func (m *Mysql) GetName() string {
 func (m *Mysql) GetSelector() map[string]string {
 	return map[string]string{
 		"app": "mictract",
-		"tier": "mysql",
+		"tier": "database",
 	}
 }
 
