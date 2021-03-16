@@ -6,15 +6,15 @@ package request
 //	Consensus	string `json:"consensus" binding:"required"`
 //}
 type AddNetworkReq struct {
-	Consensus	string `form:"consensus" binding:"required"`
-	OrdererCount int 	`form:"ordererCount" binding:"required"`
-	PeerCounts	[]int	`form:"peerCounts" binding:"required"`
+	Consensus	string `form:"consensus" json:"consensus" binding:"required"`
+	OrdererCount int 	`form:"ordererCount" form:"ordererCount" binding:"required"`
+	PeerCounts	[]int	`form:"peerCounts" json:"peerCounts" binding:"required"`
 	TlsEnabled	bool	`form:"tlsEnalbed"`
 }
 
 type AddOrgReq struct {
-	NetworkUrl string `form:"networkUrl" binding:"required"`
-	PeerCount int `form:"peerCount" binding:"required"`
+	NetworkUrl string `form:"networkUrl" json:"networkUrl" binding:"required"`
+	PeerCount int `form:"peerCount" json:"peerCount" binding:"required"`
 }
 
 type AddOrdererReq struct {
@@ -28,8 +28,13 @@ type AddPeerReq struct {
 	Num 	int `form:"num" binding:"required"`
 }
 
+//type AddChannelReq struct {
+//	NetID 	int 	`form:"netid" binding:"required"`
+//	OrgIDs	[]int	`form:"orgids" binding:"required"`
+//}
+
 type AddChannelReq struct {
-	NetID 	int 	`form:"netid" binding:"required"`
-	OrgIDs	[]int	`form:"orgids" binding:"required"`
+	NetworkName string `form:"network" json:"network" binding:"required"`
+	Orgs       []string `form:"orgs" json:"orgs" binding:"required"`
 }
 

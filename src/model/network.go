@@ -731,6 +731,19 @@ func (n *Network) AddChannel(orgIDs []int) error {
 	return nil
 }
 
+func (n *Network)RefreshChannels() error {
+	global.Logger.Info(fmt.Sprintf("Refresh channels in net%d", n.ID))
+	for _, ch := range n.Channels {
+		global.Logger.Info(fmt.Sprintf("update channel%d...", ch.ID))
+		newCh, err := GetChannelFromNets(ch.ID, ch.NetworkID)
+		if err != nil {
+			return errors.WithMessage(err, "fail to refresh channels")
+		}
+		UpdateNets(*newCh)
+	}
+	return nil
+}
+
 
 // 给network中的自定义字段使用
 // scan for scanner helper

@@ -1,18 +1,16 @@
 package api
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/hyperledger/fabric-protos-go/common"
-	"go.uber.org/zap"
 	"mictract/enum"
-	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
 	"net/http"
 )
 
-// POST /channel
+// POST /api/channel
 // param: AddChannelReq
 func AddChannel(c *gin.Context) {
 	var info request.AddChannelReq
@@ -23,7 +21,20 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(info.NetID)
+	netID := model.NewCaUserFromDomainName(info.NetworkName).NetworkID
+	orgIDs := []int{}
+	for _, orgName := range info.Orgs {
+		orgUser := model.NewCaUserFromDomainName(orgName)
+		if orgUser.NetworkID != netID {
+			response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+				SetMessage(fmt.Sprintf("The %s is not in the %s", orgName, info.NetworkName)).
+				Result(c.JSON)
+			return
+		}
+		orgIDs = append(orgIDs, orgUser.OrganizationID)
+	}
+
+	net, err := model.GetNetworkfromNets(netID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -31,7 +42,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	if err := net.AddChannel(info.OrgIDs); err != nil {
+	if err := net.AddChannel(orgIDs); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
@@ -44,50 +55,29 @@ func AddChannel(c *gin.Context) {
 		Result(c.JSON)
 }
 
-// GET /channel
+// GET /api/channel
 
+// Note: All channel
 func GetChannelInfo(c *gin.Context) {
-	var req request.ChannelInfo
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+	ret := []model.Channel{}
+
+	nets, err := model.QueryAllNetwork()
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
-		return
 	}
 
-	var ch *model.Channel
-	var err error
-	if req.ChannelID == -1 {
-		ch, err = model.GetSystemChannel(req.NetID)
-	} else {
-		ch, err = model.GetChannelFromNets(req.ChannelID, req.NetID)
+	for _, net := range nets {
+		if err := net.RefreshChannels(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+		}
+		ret = append(ret, net.Channels...)
 	}
 
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	BCI, err := ch.GetChannelInfo()
-	if err != nil {
-		global.Logger.Error("fail to query block chain info ", zap.Error(err))
-		return
-	}
-
-	info := struct {
-		BCI *common.BlockchainInfo `json:"blockChainInfo"`
-		Channel model.Channel 	`json:"channel"`
-	}{
-		BCI: BCI.BCI,
-		Channel: *ch,
-	}
-
-	code := enum.CodeErrBlockchainNetworkError
-	if BCI.Status == 200 {
-		code = enum.CodeOk
-	}
-	response.Err(int(BCI.Status), code).SetPayload(info).Result(c.JSON)
-
+	response.Ok().
+		SetPayload(ret).
+		Result(c.JSON)
 }

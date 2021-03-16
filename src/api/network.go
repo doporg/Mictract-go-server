@@ -162,7 +162,7 @@ func GetNetwork(c *gin.Context) {
 func DeleteNetwork(c *gin.Context) {
 	// id, err := strconv.Atoi(c.Param("id"))
 	req := struct {
-		URL string `form:"url" binding:"required"`
+		URL string `form:"url" json:"url" binding:"required"`
 	}{}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
