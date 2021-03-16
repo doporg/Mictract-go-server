@@ -27,6 +27,7 @@ func GetRouter() (router *gin.Engine) {
 	OrganizationRouter := APIRoute.Group("organization")
 	{
 		OrganizationRouter.POST("/", api.AddOrg)
+		OrganizationRouter.GET("/", api.ListOrganizations)
 	}
 
 	PeerRouter := APIRoute.Group("peer")

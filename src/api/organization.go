@@ -19,7 +19,15 @@ func AddOrg(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(info.NetID)
+	if info.PeerCount < 1 {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage("An organization contains at least one peer").
+			Result(c.JSON)
+		return
+	}
+
+	netID := model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID
+	net, err := model.GetNetworkfromNets(netID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -27,11 +35,29 @@ func AddOrg(c *gin.Context) {
 		return
 	}
 
+	orgID := len(net.Organizations)
 	if err := net.AddOrg(); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
+	}
+
+	// add rest peer
+	org, err := model.GetOrgFromNets(orgID, netID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+	for i := 1; i < info.PeerCount; i++ {
+		if err := org.AddPeer(); err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
 	}
 
 	net, _ = model.GetNetworkfromNets(net.ID)
@@ -40,4 +66,31 @@ func AddOrg(c *gin.Context) {
 		SetPayload(net).
 		Result(c.JSON)
 
+}
+
+// GET /api/organization
+func ListOrganizations(c *gin.Context) {
+	info := struct {
+		NetworkUrl string `form:"networkUrl" binding:"required"`
+	}{}
+
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(
+		model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(net.Organizations[1:]).
+		Result(c.JSON)
 }
