@@ -118,7 +118,7 @@ func GetSystemChannel(netID int) (*Channel, error) {
 		Name: "system-channel",
 		NetworkID: netID,
 		Organizations: []Organization{net.Organizations[0]},
-		Orderers: Orders{},
+		Orderers: net.Orders,
 	}, nil
 }
 

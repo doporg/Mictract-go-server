@@ -224,6 +224,7 @@ func (n *Network) Deploy() (err error) {
 		Orderers: []Order {
 			{fmt.Sprintf("orderer1.net%d.com", n.ID)},
 		},
+		Status: "starting",
 	}
 
 	// create tools resources
@@ -289,6 +290,9 @@ func (n *Network) Deploy() (err error) {
 	if err := channel.CreateChannel(fmt.Sprintf("orderer1.net%d.com", n.ID)); err != nil {
 		return errors.WithMessage(err, "fail to create channel")
 	}
+	ch, _ := GetChannelFromNets(channel.ID, n.ID)
+	ch.Status = "success"
+	UpdateNets(*ch)
 
 	// TODO: join peers into the first channel
 	n, err = GetNetworkfromNets(n.ID)
@@ -299,7 +303,9 @@ func (n *Network) Deploy() (err error) {
 		return errors.WithMessage(err, "fail to join channel")
 	}
 
-	// TODO: create the rest of organizations
+	o, _ := GetOrgFromNets(org1.ID, n.ID)
+	o.Status = "success"
+	UpdateNets(o)
 
 	return nil
 }
@@ -656,6 +662,96 @@ func (net *Network)AddOrderersToSystemChannel() error {
 	return nil
 }
 
+func (n *Network) AddOrgToConsortium(orgID int) error {
+	global.Logger.Info(fmt.Sprintf("Add org%d to Consortium(Write to system-channel)...", orgID))
+	net, err := GetNetworkfromNets(n.ID)
+	if err != nil {
+		return err
+	}
+	org, err := GetOrgFromNets(orgID, net.ID)
+	if err != nil {
+		return err
+	}
+
+	global.Logger.Info("Obtaining channel config...")
+	sysch, err := GetSystemChannel(net.ID)
+	if err != nil {
+		return err
+	}
+	if err :=sysch.getAndStoreConfig(); err != nil {
+		return err
+	}
+
+	global.Logger.Info("generate configtx.yaml...")
+	configtxFile, err := os.Create(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "configtx.yaml"))
+	if err != nil {
+		return errors.WithMessage(err, "fail to open configtx.yaml")
+	}
+	_, err = configtxFile.WriteString(org.GetConfigtxFile())
+	if err != nil {
+		return errors.WithMessage(err, "fail to write configtx.yaml")
+	}
+
+	global.Logger.Info("generate org_update_in_envelope.pb...")
+	tools := kubernetes.Tools{}
+	_, _, err = tools.ExecCommand(
+		filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
+		"addOrgToConsortium",
+		"system-channel",
+		org.MSPID)
+	if err != nil {
+		return errors.WithMessage(err, "fail to exec addorg.sh")
+	}
+
+
+	global.Logger.Info("sign for org_update_in_envelope.pb")
+	UpdateSDK(n.ID)
+	sdk, err := GetSDKByNetWorkID(n.ID)
+	if err != nil {
+		return err
+	}
+
+	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca.net%d.com", n.ID)), mspclient.WithOrg("ordererorg"))
+	if err != nil {
+		return err
+	}
+
+	signs := []msp.SigningIdentity{}
+	adminIdentity, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@net%d.com", n.ID))
+	if err != nil {
+		return errors.WithMessage(err, "ordererAdmin fail to sign")
+	}
+	signs = append(signs, adminIdentity)
+
+	global.Logger.Info("update org_update_in_envelope.pb...")
+	envelopeFile, err := os.Open(filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "org_update_in_envelope.pb"))
+	if err != nil {
+		return err
+	}
+	defer envelopeFile.Close()
+
+	resmgmtClient, err := resmgmt.New(
+		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", net.ID)), fabsdk.WithOrg("ordererorg")))
+	if err != nil {
+		return err
+	}
+
+	req := resmgmt.SaveChannelRequest{
+		ChannelID:         "system-channel",
+		ChannelConfig:     envelopeFile,
+		SigningIdentities: signs,
+	}
+	_, err = resmgmtClient.SaveChannel(
+		req,
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
+		resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", net.ID)))
+	if err != nil {
+		return errors.WithMessage(err, "fail to update channel config")
+	}
+
+	return nil
+}
+
 // AddOrg creates an organizational entity
 func (n *Network) AddOrg() error {
 	net, err := GetNetworkfromNets(n.ID)
@@ -669,6 +765,14 @@ func (n *Network) AddOrg() error {
 	if err := org.CreateNodeEntity(); err != nil {
 		return err
 	}
+	if err := net.AddOrgToConsortium(org.ID); err != nil {
+		return err
+	}
+
+	o, _ := GetOrgFromNets(org.ID, net.ID)
+	o.Status = "success"
+	UpdateNets(o)
+
 	return nil
 }
 
