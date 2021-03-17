@@ -109,7 +109,6 @@ func CreateNetwork(c *gin.Context) {
 				return
 			}
 		}
-
 		net, _ = model.GetNetworkfromNets(net.ID)
 		net.Status = "running"
 		model.UpdateNets(*net)

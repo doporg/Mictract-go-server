@@ -564,6 +564,8 @@ func (net *Network)AddOrderersToSystemChannel() error {
 		return err
 	}
 
+	kubernetes.NewOrderer(n.ID, newOrdererID).Create()
+
 	// generate ord1.json
 	st := `[`
 	for _, orderer := range n.Orders {

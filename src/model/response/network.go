@@ -24,7 +24,7 @@ func NewNetwork(n model.Network) Network {
 		orgs = NewOrgs(n.Organizations[1:])
 	}
 	ret := Network{
-		Name: fmt.Sprintf("net%d", n.ID),
+		Name: fmt.Sprintf("net%d.com", n.ID),
 		Consensus: n.Consensus,
 		TlsEnabled: n.TlsEnabled,
 		Status: n.Status,
