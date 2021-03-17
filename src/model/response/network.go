@@ -3,6 +3,7 @@ package response
 import (
 	"fmt"
 	"mictract/model"
+	"strconv"
 )
 
 type Network struct {
@@ -22,13 +23,16 @@ func NewNetwork(n model.Network) Network {
 		Name: fmt.Sprintf("net%d", n.ID),
 		Consensus: n.Consensus,
 		TlsEnabled: n.TlsEnabled,
-		Status: "running",
-		CreateTime: n.CreatedAt.String(),
+		Status: n.Status,
+		CreateTime: strconv.FormatInt(n.CreatedAt.Unix(), 10),
 		Orderers: []string{},
-		Organizations: NewOrgs(n.Organizations),
+		Organizations: NewOrgs(n.Organizations[1:]),
 		// TODO
 		Users: []User{},
 		Channels: NewChannels(n.Channels),
+	}
+	for _, orderer := range n.Orders {
+		ret.Orderers = append(ret.Orderers, orderer.Name)
 	}
 	return ret
 }

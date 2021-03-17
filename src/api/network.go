@@ -68,50 +68,54 @@ func CreateNetwork(c *gin.Context) {
 	// TODO
 	// check if the network name has existed.
 	// check if the new network configuration could be saved.
-	net := model.GetBasicNetwork(info.Consensus)
-	if err := net.Deploy(); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	// add rest org
-	for i := 1; i < len(info.PeerCounts); i++ {
-		if err := net.AddOrg(); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-				SetMessage(err.Error()).
-				Result(c.JSON)
+	go func() {
+		net := model.GetBasicNetwork(info.Consensus)
+		if err := net.Deploy(); err != nil {
+			net, _ = model.GetNetworkfromNets(net.ID)
+			net.Status = "error"
+			model.UpdateNets(*net)
 			return
 		}
-	}
 
-	// add rest peer
-	for j := 0; j < len(info.PeerCounts); j++ {
-		for i := 0; i < info.PeerCounts[j] - 1; i++ {
-			net, _ = model.GetNetworkfromNets(net.ID)
-			if err := net.Organizations[j + 1].AddPeer(); err != nil {
-				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-					SetMessage(err.Error()).
-					Result(c.JSON)
+		// add rest org
+		for i := 1; i < len(info.PeerCounts); i++ {
+			if err := net.AddOrg(); err != nil {
+				net, _ = model.GetNetworkfromNets(net.ID)
+				net.Status = "error"
+				model.UpdateNets(*net)
 				return
 			}
 		}
-	}
 
-	// add rest orderer
-	for i := 1; i < info.OrdererCount; i++ {
-		if err := net.AddOrderersToSystemChannel(); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
+		// add rest peer
+		for j := 0; j < len(info.PeerCounts); j++ {
+			for i := 0; i < info.PeerCounts[j]-1; i++ {
+				net, _ = model.GetNetworkfromNets(net.ID)
+				if err := net.Organizations[j+1].AddPeer(); err != nil {
+					net, _ = model.GetNetworkfromNets(net.ID)
+					net.Status = "error"
+					model.UpdateNets(*net)
+					return
+				}
+			}
 		}
-	}
 
-	net, _ = model.GetNetworkfromNets(net.ID)
+		// add rest orderer
+		for i := 1; i < info.OrdererCount; i++ {
+			if err := net.AddOrderersToSystemChannel(); err != nil {
+				net, _ = model.GetNetworkfromNets(net.ID)
+				net.Status = "error"
+				model.UpdateNets(*net)
+				return
+			}
+		}
+
+		net, _ = model.GetNetworkfromNets(net.ID)
+		net.Status = "running"
+		model.UpdateNets(*net)
+	}()
+
 	response.Ok().
-		SetPayload(response.NewNetwork(*net)).
 		Result(c.JSON)
 }
 

@@ -33,6 +33,8 @@ type Network struct {
 	ID        int `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	
+	Status string `json:"status"`
 
 	Name          string        `json:"name" binding:"required"`
 	Orders        Orders        `json:"orders" binding:"required" gorm:"type:text"`
@@ -190,6 +192,7 @@ func GetBasicNetwork(consensus string) *Network {
 		TlsEnabled: true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+		Status: "starting",
 	}
 }
 
