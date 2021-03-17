@@ -63,7 +63,7 @@ func AddOrg(c *gin.Context) {
 	net, _ = model.GetNetworkfromNets(net.ID)
 
 	response.Ok().
-		SetPayload(net).
+		SetPayload(response.NewOrg(net.Organizations[len(net.Organizations) -1])).
 		Result(c.JSON)
 
 }
@@ -91,6 +91,6 @@ func ListOrganizations(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(net.Organizations[1:]).
+		SetPayload(response.NewOrgs(net.Organizations[1:])).
 		Result(c.JSON)
 }
