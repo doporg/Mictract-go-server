@@ -2,7 +2,9 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"mictract/enum"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
@@ -45,6 +47,7 @@ func AddOrg(c *gin.Context) {
 				n.Organizations[newOrgID].Status = "error"
 			}
 			model.UpdateNets(*n)
+			global.Logger.Error("fail to add org", zap.Error(err))
 			return
 		}
 
@@ -56,6 +59,7 @@ func AddOrg(c *gin.Context) {
 				n.Organizations[newOrgID].Status = "error"
 			}
 			model.UpdateNets(*n)
+			global.Logger.Error("fail to get org from Nets", zap.Error(err))
 			return
 		}
 		for i := 1; i < info.PeerCount; i++ {
@@ -65,6 +69,7 @@ func AddOrg(c *gin.Context) {
 					n.Organizations[newOrgID].Status = "error"
 				}
 				model.UpdateNets(*n)
+				global.Logger.Error("fail to add rest peer", zap.Error(err))
 				return
 			}
 		}

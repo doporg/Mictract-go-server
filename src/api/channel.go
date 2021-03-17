@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"mictract/enum"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
@@ -51,6 +53,7 @@ func AddChannel(c *gin.Context) {
 				n.Channels[newChID - 1].Status = "error"
 			}
 			model.UpdateNets(*n)
+			global.Logger.Error("fail to add channel", zap.Error(err))
 			return
 		}
 		n, _ := model.GetNetworkfromNets(netID)

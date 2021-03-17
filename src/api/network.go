@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"mictract/enum"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
@@ -74,6 +76,7 @@ func CreateNetwork(c *gin.Context) {
 			net, _ = model.GetNetworkfromNets(net.ID)
 			net.Status = "error"
 			model.UpdateNets(*net)
+			global.Logger.Error("fail to deploy basic network ", zap.Error(err))
 			return
 		}
 
@@ -83,6 +86,7 @@ func CreateNetwork(c *gin.Context) {
 				net, _ = model.GetNetworkfromNets(net.ID)
 				net.Status = "error"
 				model.UpdateNets(*net)
+				global.Logger.Error("fail to add rest org", zap.Error(err))
 				return
 			}
 		}
@@ -95,6 +99,7 @@ func CreateNetwork(c *gin.Context) {
 					net, _ = model.GetNetworkfromNets(net.ID)
 					net.Status = "error"
 					model.UpdateNets(*net)
+					global.Logger.Error("fail to add rest peer", zap.Error(err))
 					return
 				}
 			}
@@ -106,6 +111,7 @@ func CreateNetwork(c *gin.Context) {
 				net, _ = model.GetNetworkfromNets(net.ID)
 				net.Status = "error"
 				model.UpdateNets(*net)
+				global.Logger.Error("fail to add rest orderer", zap.Error(err))
 				return
 			}
 		}
