@@ -24,6 +24,8 @@ type Organization struct {
 	Peers       Peers  `json:"peers"`
 	Users		[]string `json:"users"`
 
+	Status	string `json:"status"`
+
 	//CAID        string `json:"caid"`
 	//NetworkName string `json:"networkname"`
 }
@@ -122,6 +124,7 @@ func GetBasicOrg(orgID, netID int) *Organization {
 			MSPID: "ordererMSP",
 			Peers: []Peer{},
 			Users: []string{},
+			Status: "starting",
 		}
 	} else {
 		return &Organization{
@@ -131,6 +134,7 @@ func GetBasicOrg(orgID, netID int) *Organization {
 			MSPID: fmt.Sprintf("org%dMSP", orgID),
 			Peers: []Peer{},
 			Users: []string{},
+			Status: "starting",
 		}
 	}
 }

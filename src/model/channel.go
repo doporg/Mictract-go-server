@@ -31,6 +31,8 @@ type Channel struct {
 	NetworkID   int        `json:"networkID"`
 	Organizations Organizations `json:"organizations"`
 	Orderers      Orders        `json:"orderers"`
+
+	Status 	string 	`json:"status"`
 }
 
 type Channels []Channel

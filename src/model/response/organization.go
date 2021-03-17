@@ -9,12 +9,14 @@ type Organization struct {
 	Name string `json:"name"`
 	Peers []string `json:"peers"`
 	Users []string `json:"users"`
+	Status string 	`json:"status"`
 }
 
 func NewOrg(o model.Organization) Organization {
 	ret := Organization{
 		Peers: []string{},
 		Users: []string{},
+		Status: o.Status,
 	}
 
 	// peers

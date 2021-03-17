@@ -678,6 +678,7 @@ func (n *Network) AddChannel(orgIDs []int) error {
 		NetworkID: n.ID,
 		Organizations: []Organization{},
 		Orderers: []Order{n.Orders[0]},
+		Status: "starting",
 	}
 
 	orgNum := len(n.Organizations) - 1
