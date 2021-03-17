@@ -19,6 +19,10 @@ type Network struct {
 }
 
 func NewNetwork(n model.Network) Network {
+	orgs := []Organization{}
+	if len(n.Organizations) >= 2 {
+		orgs = NewOrgs(n.Organizations[1:])
+	}
 	ret := Network{
 		Name: fmt.Sprintf("net%d", n.ID),
 		Consensus: n.Consensus,
@@ -26,7 +30,7 @@ func NewNetwork(n model.Network) Network {
 		Status: n.Status,
 		CreateTime: strconv.FormatInt(n.CreatedAt.Unix(), 10),
 		Orderers: []string{},
-		Organizations: NewOrgs(n.Organizations[1:]),
+		Organizations: orgs,
 		// TODO
 		Users: []User{},
 		Channels: NewChannels(n.Channels),

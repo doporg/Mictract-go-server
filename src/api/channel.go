@@ -51,7 +51,6 @@ func AddChannel(c *gin.Context) {
 
 	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
-		SetPayload(response.NewChannel(net.Channels[len(net.Channels) - 1])).
 		Result(c.JSON)
 }
 

@@ -90,7 +90,12 @@ func ListOrganizations(c *gin.Context) {
 		return
 	}
 
+	orgs := []response.Organization{}
+	if len(net.Organizations) >= 2 {
+		orgs = response.NewOrgs(net.Organizations[1:])
+	}
+
 	response.Ok().
-		SetPayload(response.NewOrgs(net.Organizations[1:])).
+		SetPayload(orgs).
 		Result(c.JSON)
 }
