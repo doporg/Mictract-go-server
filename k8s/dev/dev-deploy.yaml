@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mictract-dev
+spec:
+  selector:
+    matchLabels:
+      app: mictract-dev
+  template:
+    metadata:
+      labels:
+        app: mictract-dev
+    spec:
+      containers:
+      - name: dev
+        image: tanglizi/mictract-dev:1.4
+        env:
+        - name: GOPROXY
+          value: https://goproxy.cn,direct
+        ports:
+        - name: dlv
+          containerPort: 2345
+        - name: ssh
+          containerPort: 22
+        - name: mictract
+          containerPort: 8080
+        volumeMounts:
+        - name: networks
+          mountPath: /mictract
+      volumes:
+      - name: networks
+        nfs:
+          # configure your NFS server, `path` means `NFS_EXPOSED_PATH`
+          path: /var/mictract
+          server: 192.168.49.1
