@@ -121,7 +121,7 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := model.QueryUserByUserName(newUser.GetUsername())
+	users, err := model.QueryUserByUserName(newUser.GetUsername())
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -130,7 +130,7 @@ func CreateUser(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(user).
+		SetPayload(response.NewUser(users[0])).
 		Result(c.JSON)
 }
 
@@ -144,7 +144,7 @@ func ListUsers(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(users).
+		SetPayload(response.NewUsers(users)).
 		Result(c.JSON)
 }
 

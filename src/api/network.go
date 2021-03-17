@@ -111,7 +111,7 @@ func CreateNetwork(c *gin.Context) {
 
 	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
-		SetPayload(net).
+		SetPayload(response.NewNetwork(*net)).
 		Result(c.JSON)
 }
 
@@ -131,7 +131,7 @@ func ListNetworks(c *gin.Context) {
 			Result(c.JSON)
 	} else {
 		response.Ok().
-			SetPayload(nets).
+			SetPayload(response.NewNetworks(nets)).
 			Result(c.JSON)
 	}
 }
@@ -153,7 +153,7 @@ func GetNetwork(c *gin.Context) {
 			Result(c.JSON)
 	} else {
 		response.Ok().
-			SetPayload(net).
+			SetPayload(response.NewNetwork(*net)).
 			Result(c.JSON)
 	}
 }
