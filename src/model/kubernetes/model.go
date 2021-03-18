@@ -9,12 +9,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
 	"mictract/global"
+	"sync"
 )
 
 type K8sModel interface {
 	GetSelector()			map[string]string
 	GetPod()				(*apiv1.Pod, error)
 	Create()
+	AwaitableCreate()
 	Delete()
 	Watch()
 	ExecCommand(...string)	(string, string, error)
@@ -34,8 +36,14 @@ func getPod(m K8sModel) (*apiv1.Pod, error) {
 	return pods[0], nil
 }
 
+// TODO: maybe memory leak
+// watch function will watching your kubernetes model according to the model labels.
+// Kubernetes informer will scan all the resources, when your model status had been changed, it will call the `EventHandler` here.
+// watch function here just register your callback as handlers into informer.
+//
+// Note: this function may cause memory leak, because the `EventHandler` will never be removed.
+// 	If your callback closure some large objects, its may wont be collect.
 func watch(m K8sModel, cb *callback) {
-	// func watch(m K8sModel, phaseUpdate []func(apiv1.PodPhase, apiv1.PodPhase)) {
 	labelContains := func (target map[string]string) bool {
 		for key, val := range m.GetSelector() {
 			if targetVal, ok := target[key]; !ok || val != targetVal {
@@ -108,6 +116,25 @@ func execCommand(m K8sModel, cmd ...string) (string, string, error) {
 	}
 
 	return stdout.String(), stderr.String(), nil
+}
+
+func awaitableCreate(m K8sModel) {
+	wg := sync.WaitGroup{}
+	cb := func(old apiv1.PodPhase, new apiv1.PodPhase) {
+		if new == apiv1.PodRunning || new == apiv1.PodFailed || new == apiv1.PodUnknown {
+			wg.Done()
+		}
+	}
+
+	watch(m, &callback{
+		onPodPhaseUpdate: []func(apiv1.PodPhase, apiv1.PodPhase) {
+			cb,
+		},
+	})
+
+	wg.Add(1)
+	m.Create()
+	wg.Wait()
 }
 
 

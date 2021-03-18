@@ -317,6 +317,10 @@ func (ca *CA) Create() {
 	// ca.CreateIngress(global.K8sClientset)
 }
 
+func (ca *CA) AwaitableCreate() {
+	awaitableCreate(ca)
+}
+
 // Connect to K8S to delete all the resources.
 func (ca *CA) Delete() {
 	var err error

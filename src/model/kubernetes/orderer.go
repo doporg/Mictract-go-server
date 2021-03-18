@@ -272,6 +272,10 @@ func (o *Orderer) Create() {
 	o.CreateService()
 }
 
+func (o *Orderer) AwaitableCreate() {
+	awaitableCreate(o)
+}
+
 // Connect to K8S to delete all the resources.
 func (o *Orderer) Delete() {
 	var err error

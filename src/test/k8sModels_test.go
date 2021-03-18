@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	mysql		= &kubernetes.Mysql{}
 	tools 		= &kubernetes.Tools{}
 	ordererCA	= kubernetes.NewOrdererCA(1)
 	org1PeerCA	= kubernetes.NewPeerCA(1, 1)
@@ -111,10 +110,12 @@ func TestDeleteOrdererCA(t *testing.T) {
 	ordererCA.Delete()
 }
 
-func TestCreateMysql(t *testing.T) {
-	mysql.Create()
-}
+func TestAwaitableCreateOnCA(t *testing.T) {
+	ca := kubernetes.NewPeerCA(1, 1)
 
-func TestDeleteMysql(t *testing.T) {
-	mysql.Delete()
+	global.Logger.Info("peer ca starts creating")
+	ca.AwaitableCreate()
+
+	global.Logger.Info("peer ca has been created synchronously")
+	ca.Delete()
 }
