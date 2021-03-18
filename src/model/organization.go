@@ -3,16 +3,15 @@ package model
 import (
 	"database/sql/driver"
 	"fmt"
+	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
+	"github.com/pkg/errors"
 	"mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"path/filepath"
 	"strings"
 	"time"
-
-	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
-	"github.com/pkg/errors"
 )
 
 type Organization struct {
@@ -147,17 +146,21 @@ func (org *Organization)CreateBasicOrganizationEntity() error {
 
 	UpdateNets(*org)
 
-	global.Logger.Info("Starting ca node...")
-	global.Logger.Info("此处需要同步，如果你看到这条信心，不要忘了增加同步代码，并且删除这条info")
 	model := kubernetes.NewOrdererCA(org.NetworkID)
 	if org.ID != -1 {
 		model = kubernetes.NewPeerCA(org.NetworkID, org.ID)
 	}
-	model.Create()
+	//model.Create()
+	global.Logger.Info("peer ca starts creating")
+	if err := model.AwaitableCreate(); err != nil {
+		return err
+	}
+	global.Logger.Info("peer ca has been created synchronously")
 
-	// TODO: make it sync
-	// wait for pulling images when first deploy
-	time.Sleep(30 * time.Second)
+
+	// TODO: sync
+	// 等待nfs同步文件
+	time.Sleep(5 * time.Second)
 
 	// 从ca的挂载目录里取出ca证书，构建组织msp
 	global.Logger.Info("The msp of the organization is being built...")
@@ -171,7 +174,6 @@ func (org *Organization)CreateBasicOrganizationEntity() error {
 		return err
 	}
 
-	time.Sleep(5 * time.Second)
 
 	// 更新它的sdk，方便下一步获取最新的sdk
 	UpdateSDK(org.NetworkID)
@@ -231,16 +233,19 @@ func (org *Organization)CreateBasicOrganizationEntity() error {
 // CreateNodeEntity creates a node entity and starts the peer or orderer node in the organization through the existing certificate
 func (org *Organization) CreateNodeEntity() error {
 	global.Logger.Info("Starting the peer node or orderer node")
-	global.Logger.Info("此处可能需要同步，启动节点后，如果用户立即对节点进行操作，可能pod里节点程序未初始化完成，导致错误。如果你看到这条信息，不要忘了考虑这件事情，并且删除这条info")
 	if org.ID == -1 {
-		kubernetes.NewOrderer(org.NetworkID, 1).Create()
+		global.Logger.Info("orderer starts creating")
+		if err := kubernetes.NewOrderer(org.NetworkID, 1).AwaitableCreate(); err != nil {
+			return err
+		}
+		global.Logger.Info("orderer has been created synchronously")
 	} else {
-		kubernetes.NewPeer(org.NetworkID, org.ID, 1).Create()
+		global.Logger.Info("peer starts creating")
+		if err := kubernetes.NewPeer(org.NetworkID, org.ID, 1).AwaitableCreate(); err != nil {
+			return err
+		}
+		global.Logger.Info("peer has been created synchronously")
 	}
-
-	// TODO: make it sync
-	// wait for pulling images when first deploy
-	time.Sleep(5 * time.Second)
 
 	return nil
 }
@@ -318,7 +323,11 @@ func (o *Organization)AddPeer() error {
 	}
 
 	// org.Peers = append(org.Peers, Peer{Name: newPeer.GetUsername()})
+	global.Logger.Info("peer starts creating")
+	if err := kubernetes.NewPeer(newPeer.NetworkID, newPeer.OrganizationID, newPeer.UserID).AwaitableCreate(); err != nil {
+		return err
+	}
+	global.Logger.Info("peer has been created synchronously")
 
-	kubernetes.NewPeer(newPeer.NetworkID, newPeer.OrganizationID, newPeer.UserID).Create()
 	return nil
 }

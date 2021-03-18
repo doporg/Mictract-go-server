@@ -232,11 +232,6 @@ func (n *Network) Deploy() (err error) {
 	tools := kubernetes.Tools{}
 	//tools.Create()
 
-
-	// TODO: make it sync
-	// wait for pulling images when first deploy
-	time.Sleep(5 * time.Second)
-
 	// 启动ca节点并获取基础组织的证书
 	if err := ordererOrg.CreateBasicOrganizationEntity(); err != nil {
 		global.Logger.Error("fail to start ordererOrg", zap.Error(err))
@@ -273,18 +268,14 @@ func (n *Network) Deploy() (err error) {
 
 	// generate a default channel
 	global.Logger.Info("generate a default channel")
-	_, _, err = tools.ExecCommand("configtxgen",
+	if _, _, err = tools.ExecCommand("configtxgen",
 		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
 		"-profile", "DefaultChannel",
 		"-channelID", "channel1",
 		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel1.tx", n.ID),
-	)
-
-	global.Logger.Info("此处需要同步，如果你看到这条信息，不要忘了增加同步代码，并且删除这条info")
-	// TODO: make it sync
-	// wait for pulling images when first deploy
-	time.Sleep(30 * time.Second)
-
+	); err != nil {
+		return err
+	}
 
 	// Create first Channel channl1
 	if err := channel.CreateChannel(fmt.Sprintf("orderer1.net%d.com", n.ID)); err != nil {
@@ -570,7 +561,11 @@ func (net *Network)AddOrderersToSystemChannel() error {
 		return err
 	}
 
-	kubernetes.NewOrderer(n.ID, newOrdererID).Create()
+	global.Logger.Info("orderer starts creating")
+	if err := kubernetes.NewOrderer(n.ID, newOrdererID).AwaitableCreate(); err != nil {
+		return err
+	}
+	global.Logger.Info("orderer has been created synchronously")
 
 	n, _ = GetNetworkfromNets(n.ID)
 	// generate ord1.json
