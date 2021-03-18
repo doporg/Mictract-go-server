@@ -348,6 +348,9 @@ func UpdateSDK(networkID int) error {
 	if err != nil {
 		return err
 	}
+	if _, ok := global.SDKs[fmt.Sprintf("net%d", networkID)]; ok {
+		global.SDKs[fmt.Sprintf("net%d", networkID)].Close()
+	}
 	global.SDKs[fmt.Sprintf("net%d", networkID)] = sdk
 	return nil
 }
