@@ -10,7 +10,7 @@ WIP now.
 
 
 
-### NFS
+### NFS & DB
 
 1. install `nfs-utils`
 

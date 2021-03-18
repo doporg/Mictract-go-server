@@ -114,8 +114,9 @@ func TestAwaitableCreateOnCA(t *testing.T) {
 	ca := kubernetes.NewPeerCA(1, 1)
 
 	global.Logger.Info("peer ca starts creating")
-	ca.AwaitableCreate()
-
+	err := ca.AwaitableCreate()
 	global.Logger.Info("peer ca has been created synchronously")
+	assert.Equal(t, true, err == nil)
+
 	ca.Delete()
 }

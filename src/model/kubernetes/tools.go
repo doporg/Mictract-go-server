@@ -95,8 +95,8 @@ func (t *Tools) Create() {
 	t.CreateDeployment()
 }
 
-func (t *Tools) AwaitableCreate() {
-	awaitableCreate(t)
+func (t *Tools) AwaitableCreate() error {
+	return awaitableCreate(t)
 }
 
 // Connect to K8S to delete all the resources.

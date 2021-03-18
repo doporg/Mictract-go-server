@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"fmt"
 	"go.uber.org/zap"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -13,10 +14,11 @@ import (
 )
 
 type K8sModel interface {
+	GetName()				string
 	GetSelector()			map[string]string
 	GetPod()				(*apiv1.Pod, error)
 	Create()
-	AwaitableCreate()
+	AwaitableCreate()		error
 	Delete()
 	Watch()
 	ExecCommand(...string)	(string, string, error)
@@ -118,10 +120,17 @@ func execCommand(m K8sModel, cmd ...string) (string, string, error) {
 	return stdout.String(), stderr.String(), nil
 }
 
-func awaitableCreate(m K8sModel) {
+// awaitableCreate provide ability to wait creation process.
+// When informer listened to your k8s model and get the change of your model phase, awaitableCreate will return.
+// If your model has been running or duplicated, it return nil.
+// If your model failed or some unknown causes, it return an error.
+func awaitableCreate(m K8sModel) (err error) {
 	wg := sync.WaitGroup{}
 	cb := func(old apiv1.PodPhase, new apiv1.PodPhase) {
-		if new == apiv1.PodRunning || new == apiv1.PodFailed || new == apiv1.PodUnknown {
+		if new == apiv1.PodRunning {
+			wg.Done()
+		} else if new == apiv1.PodFailed || new == apiv1.PodUnknown {
+			err = fmt.Errorf("error occurred when %s creating", m.GetName())
 			wg.Done()
 		}
 	}
@@ -135,6 +144,8 @@ func awaitableCreate(m K8sModel) {
 	wg.Add(1)
 	m.Create()
 	wg.Wait()
+
+	return err
 }
 
 

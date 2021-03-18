@@ -297,8 +297,8 @@ func (p *Peer) Create() {
 	p.CreateService()
 }
 
-func (p *Peer) AwaitableCreate() {
-	awaitableCreate(p)
+func (p *Peer) AwaitableCreate() error {
+	return awaitableCreate(p)
 }
 
 // Connect to K8S to delete all the resources.
