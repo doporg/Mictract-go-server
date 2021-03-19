@@ -22,6 +22,8 @@ var (
 	// LOCAL_BASE_PATH is where the scripts folder is actually stored.
 	LOCAL_SCRIPTS_PATH	= filepath.Join(LOCAL_MOUNT_PATH, "scripts")
 
+	LOCAL_CC_PATH		= filepath.Join(LOCAL_MOUNT_PATH, "chaincodes")
+
 	SDK_LEVEL			= "debug"
 
 	DB_SERVER_URL		= "db-server"
