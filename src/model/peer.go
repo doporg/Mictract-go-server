@@ -84,3 +84,18 @@ func (peer *Peer)GetJoinedChannel() ([]string, error) {
 	}
 	return ret, nil
 }
+
+func (p *Peer)QueryInstalled(orgResMgmt *resmgmt.Client) ([]resmgmt.LifecycleInstalledCC, error) {
+	resps, err := orgResMgmt.LifecycleQueryInstalledCC(
+		resmgmt.WithTargetEndpoints(p.Name),
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts))
+	if err != nil {
+		return []resmgmt.LifecycleInstalledCC{}, errors.WithMessage(err, "fail to query ")
+	}
+
+	for _, resp := range resps {
+		fmt.Println(resp)
+	}
+
+	return resps, nil
+}
