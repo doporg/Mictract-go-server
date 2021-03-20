@@ -101,7 +101,10 @@ func DeleteNetworkByID(id int) error {
 	if err := global.DB.Where("id = ?", id).Delete(&Network{}).Error; err != nil {
 		return errors.WithMessage(err, "Unable to delete network")
 	}
-	n, _ := GetNetworkfromNets(id)
+	n, err := GetNetworkfromNets(id)
+	if err != nil {
+		return err
+	}
 	n.RemoveAllEntity()
 	// n.RemoveAllFile()
 	delete(global.Nets, fmt.Sprintf("net%d", id))
