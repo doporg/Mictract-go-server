@@ -108,6 +108,10 @@ func DeleteNetworkByID(id int) error {
 	n.RemoveAllEntity()
 	// n.RemoveAllFile()
 	delete(global.Nets, fmt.Sprintf("net%d", id))
+	sdk, err := GetSDKByNetWorkID(id)
+	if err == nil {
+		sdk.Close()
+	}
 	delete(global.SDKs, fmt.Sprintf("net%d", id))
 	return nil
 }
