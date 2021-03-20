@@ -185,6 +185,18 @@ func (p *Peer) CreateDeployment() {
 									MountPath:        "/var/hyperledger/production",
 									SubPath: filepath.Join(subPath, "prod"),
 								},
+								{
+									// core.yaml:/etc/hyperledger/fabric/core.yaml
+									Name:			  "core",
+									MountPath:        "/etc/hyperledger/fabric/core.yaml",
+									SubPath: filepath.Join("scripts", "external", "core.yaml"),
+								},
+								{
+									// external:/opt/gopath/src/github.com/hyperledger/fabric/peer/external
+									Name:             "external",
+									MountPath:        "/opt/gopath/src/github.com/hyperledger/fabric/peer/external",
+									SubPath: filepath.Join("scripts", "external"),
+								},
 							},
 						},
 					},
@@ -218,6 +230,24 @@ func (p *Peer) CreateDeployment() {
 						},
 						{
 							Name:         "production",
+							VolumeSource: apiv1.VolumeSource{
+								NFS: &apiv1.NFSVolumeSource{
+									Server: config.NFS_SERVER_URL,
+									Path: config.NFS_EXPOSED_PATH,
+								},
+							},
+						},
+						{
+							Name:         "core",
+							VolumeSource: apiv1.VolumeSource{
+								NFS: &apiv1.NFSVolumeSource{
+									Server: config.NFS_SERVER_URL,
+									Path: config.NFS_EXPOSED_PATH,
+								},
+							},
+						},
+						{
+							Name:         "external",
 							VolumeSource: apiv1.VolumeSource{
 								NFS: &apiv1.NFSVolumeSource{
 									Server: config.NFS_SERVER_URL,
