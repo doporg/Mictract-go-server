@@ -74,7 +74,7 @@ func AddOrg(c *gin.Context) {
 			}
 		}
 		n, _ := model.GetNetworkfromNets(net.ID)
-		n.Organizations[newOrgID].Status = "success"
+		n.Organizations[newOrgID].Status = "running"
 		model.UpdateNets(*n)
 		return
 	}()
@@ -88,7 +88,7 @@ func AddOrg(c *gin.Context) {
 // GET /api/organization
 func ListOrganizations(c *gin.Context) {
 	info := struct {
-		NetworkUrl string `form:"networkUrl" binding:"required"`
+		NetworkUrl string `form:"networkUrl"`
 	}{}
 
 	if err := c.ShouldBindQuery(&info); err != nil {
@@ -98,21 +98,40 @@ func ListOrganizations(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(
-		model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
+	if info.NetworkUrl == "" {
+		nets, err := model.QueryAllNetwork()
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+		}
+		orgs := []response.Organization{}
+		for _, net := range nets {
+			if len(net.Organizations) >= 2 {
+				orgs = response.NewOrgs(net.Organizations[1:])
+			}
+		}
+		response.Ok().
+			SetPayload(orgs).
 			Result(c.JSON)
-		return
-	}
 
-	orgs := []response.Organization{}
-	if len(net.Organizations) >= 2 {
-		orgs = response.NewOrgs(net.Organizations[1:])
-	}
+	} else {
+		net, err := model.GetNetworkfromNets(
+			model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
 
-	response.Ok().
-		SetPayload(orgs).
-		Result(c.JSON)
+		orgs := []response.Organization{}
+		if len(net.Organizations) >= 2 {
+			orgs = response.NewOrgs(net.Organizations[1:])
+		}
+
+		response.Ok().
+			SetPayload(orgs).
+			Result(c.JSON)
+	}
 }

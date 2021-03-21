@@ -57,7 +57,7 @@ func AddChannel(c *gin.Context) {
 			return
 		}
 		n, _ := model.GetNetworkfromNets(netID)
-		n.Channels[newChID - 1].Status = "success"
+		n.Channels[newChID - 1].Status = "running"
 		model.UpdateNets(*n)
 	}()
 

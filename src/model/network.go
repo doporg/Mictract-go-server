@@ -290,7 +290,7 @@ func (n *Network) Deploy() (err error) {
 		return errors.WithMessage(err, "fail to create channel")
 	}
 	ch, _ := GetChannelFromNets(channel.ID, n.ID)
-	ch.Status = "success"
+	ch.Status = "running"
 	UpdateNets(*ch)
 
 	// TODO: join peers into the first channel
@@ -303,7 +303,7 @@ func (n *Network) Deploy() (err error) {
 	}
 
 	o, _ := GetOrgFromNets(org1.ID, n.ID)
-	o.Status = "success"
+	o.Status = "running"
 	UpdateNets(o)
 
 	return nil
@@ -776,7 +776,7 @@ func (n *Network) AddOrg() error {
 	}
 
 	o, _ := GetOrgFromNets(org.ID, net.ID)
-	o.Status = "success"
+	o.Status = "running"
 	UpdateNets(o)
 
 	return nil

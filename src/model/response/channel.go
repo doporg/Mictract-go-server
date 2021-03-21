@@ -6,15 +6,17 @@ import (
 )
 
 type Channel struct {
-	Name string `json:"name"`
-	Organizations []string `json:"organizations"`
-	Status 	string `json:"status"`
+	Name 			string 		`json:"name"`
+	Organizations 	[]string 	`json:"organizations"`
+	Network			string 		`json:"network"`
+	Status 			string 		`json:"status"`
 }
 
 func NewChannel(c model.Channel) Channel {
 	ret := Channel{
 		Name: fmt.Sprintf("channel%d", c.ID),
 		Organizations: []string{},
+		Network: fmt.Sprintf("net%d.com", c.NetworkID),
 		Status: c.Status,
 	}
 	for _, org := range c.Organizations {
