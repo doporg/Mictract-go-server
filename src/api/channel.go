@@ -25,7 +25,7 @@ func AddChannel(c *gin.Context) {
 
 	netID := model.NewCaUserFromDomainName(info.NetworkName).NetworkID
 	orgIDs := []int{}
-	for _, orgName := range info.Orgs {
+	for _, orgName := range info.Organizations {
 		orgUser := model.NewCaUserFromDomainName(orgName)
 		if orgUser.NetworkID != netID {
 			response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
