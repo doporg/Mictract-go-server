@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"go.uber.org/zap"
 	apiv1 "k8s.io/api/core/v1"
@@ -38,13 +39,11 @@ func getPod(m K8sModel) (*apiv1.Pod, error) {
 	return pods[0], nil
 }
 
-// TODO: maybe memory leak
 // watch function will watching your kubernetes model according to the model labels.
 // Kubernetes informer will scan all the resources, when your model status had been changed, it will call the `EventHandler` here.
 // watch function here just register your callback as handlers into informer.
 //
-// Note: this function may cause memory leak, because the `EventHandler` will never be removed.
-// 	If your callback closure some large objects, its may wont be collect.
+// Note: this function may cause memory leak, because the `EventHandler` will never be collected.
 func watch(m K8sModel, cb *callback) {
 	labelContains := func (target map[string]string) bool {
 		for key, val := range m.GetSelector() {
@@ -60,19 +59,30 @@ func watch(m K8sModel, cb *callback) {
 			pod := new.(*apiv1.Pod)
 			if !labelContains(pod.Labels) { return }
 
-			for _, fn := range cb.onPodPhaseUpdate {
+			cbs := cb.onPodPhaseUpdateOnce
+			for e := cbs.Front(); e != nil; e = e.Next() {
+				fn := e.Value.(func(apiv1.PodPhase, apiv1.PodPhase) bool)
 				phase := pod.Status.Phase
-				fn(phase, phase)
+
+				if removable := fn(phase, phase); removable {
+					cbs.Remove(e)
+				}
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
 			oldPod, newPod := old.(*apiv1.Pod), new.(*apiv1.Pod)
 			if !labelContains(newPod.Labels) { return }
 
-			for _, fn := range cb.onPodPhaseUpdate {
+			cbs := cb.onPodPhaseUpdateOnce
+			for e := cbs.Front(); e != nil; e = e.Next() {
+				fn := e.Value.(func(apiv1.PodPhase, apiv1.PodPhase) bool)
 				oldPhase, newPhase := oldPod.Status.Phase, newPod.Status.Phase
+
 				if oldPhase != newPhase {
 					fn(oldPhase, newPhase)
+					if removable := fn(oldPhase, newPhase); removable {
+						cbs.Remove(e)
+					}
 				}
 			}
 		},
@@ -125,23 +135,41 @@ func execCommand(m K8sModel, cmd ...string) (string, string, error) {
 // If your model has been running or duplicated, it return nil.
 // If your model failed or some unknown causes, it return an error.
 func awaitableCreate(m K8sModel) (err error) {
+	// Here use DCL to prevent multiple thread from calling `wg.Done`.
+	isDone := false
+	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	cb := func(old apiv1.PodPhase, new apiv1.PodPhase) {
-		if new == apiv1.PodRunning {
-			wg.Done()
-		} else if new == apiv1.PodFailed || new == apiv1.PodUnknown {
-			err = fmt.Errorf("error occurred when %s creating", m.GetName())
-			wg.Done()
+
+	wg.Add(1)
+	done := func() {
+		// check if `wg.Done` is called.
+		// this line is not necessary, but can improve checking efficiency.
+		if !isDone {
+			// ensure that only one thread executes in the following areas.
+			lock.Lock()
+			// check if multiple threads that pass the first check at the same time have executed `wg.Done`.
+			if !isDone {
+				wg.Done()
+				isDone = true
+			}
+			lock.Unlock()
 		}
 	}
 
-	watch(m, &callback{
-		onPodPhaseUpdate: []func(apiv1.PodPhase, apiv1.PodPhase) {
-			cb,
-		},
+	cb := list.New()
+	cb.PushBack(func(old apiv1.PodPhase, new apiv1.PodPhase) bool {
+		if new == apiv1.PodRunning {
+			done()
+			return true
+		} else if new == apiv1.PodFailed || new == apiv1.PodUnknown {
+			err = fmt.Errorf("error occurred when %s creating", m.GetName())
+			done()
+			return true
+		}
+		return false
 	})
+	watch(m, &callback{ onPodPhaseUpdateOnce: cb })
 
-	wg.Add(1)
 	m.Create()
 	wg.Wait()
 
@@ -150,9 +178,12 @@ func awaitableCreate(m K8sModel) (err error) {
 
 
 type callback struct {
-	onPodPhaseUpdate []func(apiv1.PodPhase, apiv1.PodPhase)
+	// onPodPhaseUpdateOnce is a list contains callback `func(apiv1.PodPhase, apiv1.PodPhase) bool`.
+	// Note: each callback here can decide to remove itself.
+	//	If your callback return true, then your callback will be removed.
+	onPodPhaseUpdateOnce *list.List
 }
 
-func (c *callback) AddPodPhaseUpdateHandler(handler func(apiv1.PodPhase, apiv1.PodPhase)) {
-	c.onPodPhaseUpdate = append(c.onPodPhaseUpdate, handler)
+func (c *callback) AddPodPhaseUpdateOnceHandler(handler func(apiv1.PodPhase, apiv1.PodPhase)) {
+	c.onPodPhaseUpdateOnce.PushBack(handler)
 }

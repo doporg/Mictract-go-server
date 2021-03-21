@@ -4,15 +4,14 @@ import (
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/kubernetes"
-	"time"
 )
 
 func init() {
 	// initialization code goes here.
 
-	(&kubernetes.Tools{}).Create()
+	_ = (&kubernetes.Tools{}).AwaitableCreate()
 	// TODO: sync
-	time.Sleep(30 * time.Second)
+	// time.Sleep(30 * time.Second)
 
 	initDB()
 	createTables()

@@ -118,6 +118,8 @@ func CreateNetwork(c *gin.Context) {
 		net, _ = model.GetNetworkfromNets(net.ID)
 		net.Status = "running"
 		model.UpdateNets(*net)
+
+		global.Logger.Info("network has been created successfully", zap.String("netName", net.Name))
 	}()
 
 	response.Ok().

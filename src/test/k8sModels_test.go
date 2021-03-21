@@ -65,7 +65,7 @@ func TestInformer(t *testing.T) {
 
 func TestWatch(t *testing.T) {
 	tools.Watch()
-	tools.AddPodPhaseUpdateHandler(func(_ v1.PodPhase, new v1.PodPhase) {
+	tools.AddPodPhaseUpdateOnceHandler(func(_ v1.PodPhase, new v1.PodPhase) {
 		switch new {
 		case "Running":
 			global.Logger.Info("pod is running", zap.String("phase", string(new)))
