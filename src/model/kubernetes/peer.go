@@ -70,6 +70,8 @@ func (p *Peer) CreateConfigMap() {
 	// Note: local MSP id should be like "Org1MSP", which is written in `fabric-org1-config.yaml` and can not be changed.
 	localMSPId := fmt.Sprintf("org%dMSP", p.OrganizationID)
 
+	gossipURL := p.GetName() + ":7051"
+
 	configMap := &apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name + "-env",
@@ -95,8 +97,12 @@ func (p *Peer) CreateConfigMap() {
 			"CORE_PEER_CHAINCODELISTENADDRESS":"0.0.0.0:7052",
 
 			// The address for gossip. Should it use `localhost`?
-			"CORE_PEER_GOSSIP_BOOTSTRAP":"localhost:7051",
-			"CORE_PEER_GOSSIP_EXTERNALENDPOINT":"localhost:7051",
+			// 问题记录: 当调用approve时，该节点背书成功，但是"发现"了一个新节点"localhost:7051"，
+			//          客户端收到该信息，并试图连接该节点背书，当然连接不上，将下面两个url修改从
+			//          "localhost:7051"修改为peer的url时，调用approve成功。
+			// 原因: 未知
+			"CORE_PEER_GOSSIP_BOOTSTRAP": gossipURL,
+			"CORE_PEER_GOSSIP_EXTERNALENDPOINT": gossipURL,
 			"CORE_PEER_LOCALMSPID": localMSPId,
 		},
 	}
