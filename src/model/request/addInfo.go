@@ -34,7 +34,7 @@ type AddPeerReq struct {
 //}
 
 type AddChannelReq struct {
-	NetworkName string `form:"network" json:"network" binding:"required"`
-	Orgs       []string `form:"orgs" json:"orgs" binding:"required"`
+	NetworkName		string `form:"network" json:"network" binding:"required"`
+	Organizations	[]string `form:"orgs" json:"orgs" binding:"required"`
 }
 
