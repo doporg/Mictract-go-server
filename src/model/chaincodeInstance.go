@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
@@ -34,6 +35,25 @@ type ChaincodeInstance struct {
 	CCID		 int	`json:"ccid"`
 }
 
+type ChaincodeInstances []ChaincodeInstance
+
+// 自定义数据字段所需实现的两个接口
+func (ccis *ChaincodeInstances) Scan(value interface{}) error {
+	return scan(&ccis, value)
+}
+
+func (ccis ChaincodeInstances) Value() (driver.Value, error) {
+	return value(ccis)
+}
+
+func (cci *ChaincodeInstance) Scan(value interface{}) error {
+	return scan(&cci, value)
+}
+
+func (cci ChaincodeInstance) Value() (driver.Value, error) {
+	return value(cci)
+}
+
 // "OR('Org1MSP.member')"
 func (cc *Chaincode)NewChaincodeInstance(networkID, channelID int,
 	label, address, policyStr, version string,
@@ -62,13 +82,15 @@ func (cc *Chaincode)NewChaincodeInstance(networkID, channelID int,
 	var ccPkg []byte
 	var err error
 	if excc {
-		ccPkg, err = cc.PackageCC(label)
+		ccPkg, err = cc.PackageExternalCC(label, address)
 		if err != nil {
 			return nil, errors.WithMessage(err, "fail to package external chaincode")
 		}
 	} else {
 		ccPkg, err = cc.PackageCC(label)
-		return nil, errors.WithMessage(err, "fail to package chaincode")
+		if err != nil {
+			return nil, errors.WithMessage(err, "fail to package chaincode")
+		}
 	}
 
 	cci.PackageID = lcpackager.ComputePackageID(label, ccPkg)
@@ -114,6 +136,9 @@ func (cci *ChaincodeInstance)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...s
 		installCCReq,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
 		resmgmt.WithTargetEndpoints(peerURLs...))
+	if err != nil {
+		return err
+	}
 
 	global.Logger.Info("chaincode installed successfully")
 	for _, resp := range resps {
@@ -122,7 +147,7 @@ func (cci *ChaincodeInstance)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...s
 		global.Logger.Info("└── packageID: " + resp.PackageID)
 	}
 
-	return err
+	return nil
 }
 
 /*
@@ -131,7 +156,7 @@ peer lifecycle chaincode checkcommitreadiness --channelID mychannel --name marri
 查询的时候没有--init-required，查不出来；批准的时候指定了策略，查询的时候没有指定策略或者指定的和开始
 不一样，都查不出来
 */
-func (cci *ChaincodeInstance)ApproveCC(orgResMgmt *resmgmt.Client, ordererURL string) error {
+func (cci *ChaincodeInstance)ApproveCC(orgResMgmt *resmgmt.Client, ordererURL string, peerURLs ...string) error {
 	ccPolicy, err := cci.GeneratePolicy()
 	if err != nil {
 		return err
@@ -151,6 +176,7 @@ func (cci *ChaincodeInstance)ApproveCC(orgResMgmt *resmgmt.Client, ordererURL st
 		fmt.Sprintf("channel%d", cci.ChannelID),
 		approveCCReq,
 		resmgmt.WithOrdererEndpoint(ordererURL),
+		resmgmt.WithTargetEndpoints(peerURLs...),
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts))
 	if err != nil || txnID == "" {
 		return errors.WithMessage(err, "fail to approve chaincode")
@@ -159,7 +185,7 @@ func (cci *ChaincodeInstance)ApproveCC(orgResMgmt *resmgmt.Client, ordererURL st
 	return nil
 }
 
-func (cci *ChaincodeInstance)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client) (*map[string]bool, error) {
+func (cci *ChaincodeInstance)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client, peerURLs ...string) (*map[string]bool, error) {
 	global.Logger.Info("Check CC commit readiness...")
 
 	ccPolicy, err := cci.GeneratePolicy()
@@ -179,6 +205,7 @@ func (cci *ChaincodeInstance)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client) 
 	resp, err := orgResMgmt.LifecycleCheckCCCommitReadiness(
 		fmt.Sprintf("channel%d", cci.ChannelID),
 		req,
+		resmgmt.WithTargetEndpoints(peerURLs...),
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts))
 	if err != nil {
 		return nil, err
@@ -212,10 +239,20 @@ func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl str
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
 		resmgmt.WithOrdererEndpoint(ordererUrl))
+	if err != nil {
+		return err
+	}
 
 	global.Logger.Info("txID: " + string(txID))
 
-	return err
+	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
+	if err != nil {
+		return err
+	}
+	c.Chaincodes = append(c.Chaincodes, *cci)
+	UpdateNets(*c)
+
+	return nil
 }
 
 func (cci *ChaincodeInstance)QueryCommittedCC(orgResMgmt *resmgmt.Client) error {

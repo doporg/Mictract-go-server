@@ -231,6 +231,7 @@ func (n *Network) Deploy() (err error) {
 		Orderers: []Order {
 			{fmt.Sprintf("orderer1.net%d.com", n.ID)},
 		},
+		Chaincodes: []ChaincodeInstance{},
 		Status: "starting",
 	}
 
@@ -788,6 +789,7 @@ func (n *Network) AddChannel(orgIDs []int) error {
 		NetworkID: n.ID,
 		Organizations: []Organization{},
 		Orderers: []Order{n.Orders[0]},
+		Chaincodes: []ChaincodeInstance{},
 		Status: "starting",
 	}
 

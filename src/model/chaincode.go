@@ -1,7 +1,9 @@
 package model
 
 import (
-	"encoding/json"
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"github.com/pkg/errors"
 	"mictract/config"
@@ -112,7 +114,6 @@ func ListAllChaincodes() ([]Chaincode, error) {
 
 func (cc *Chaincode)PackageCC(ccLabel string) (ccPkg []byte, err error) {
 	ccSrcPath := filepath.Join(
-		config.LOCAL_CC_PATH,
 		cc.GetCCPath(),
 		"src")
 	desc := &lcpackager.Descriptor{
@@ -125,8 +126,10 @@ func (cc *Chaincode)PackageCC(ccLabel string) (ccPkg []byte, err error) {
 }
 
 func (cc *Chaincode)PackageExternalCC(label, address string) (ccPkg []byte, err error) {
-	// generate connection.json
-	connection := []byte(`{
+	payload1 := bytes.NewBuffer(nil)
+	gw1 := gzip.NewWriter(payload1)
+	tw1 := tar.NewWriter(gw1)
+	content := []byte(`{
 		"address": "` + address + `",
 		"dial_timeout": "10s",
 		"tls_required": false,
@@ -136,60 +139,53 @@ func (cc *Chaincode)PackageExternalCC(label, address string) (ccPkg []byte, err 
 		"root_cert": "-----BEGIN CERTIFICATE---- ... -----END CERTIFICATE-----"
 	}`)
 
-	f, err := os.Create(filepath.Join(cc.GetCCPath(), "connection.json"))
+	err = writePackage(tw1, "connection.json", content)
+	if err != nil {
+		return nil, errors.WithMessage(err, "fail to generate connection.json")
+	}
+
+	err = tw1.Close()
+	if err == nil {
+		err = gw1.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
-	if _, err := f.Write(connection); err != nil {
-		return nil, err
-	}
-	f.Close()
 
-	// generate code.tar.gz by connection.json
-	// tar cfz code.tar.gz connection.json
-	tools := kubernetes.Tools{}
-	if _, _, err := tools.ExecCommand("tar",
-		"cfz",
-		filepath.Join(cc.GetCCPath(), "code.tar.gz"),
-		filepath.Join(cc.GetCCPath(), "connection.json")); err != nil {
-		return nil, err
+	content = []byte(`{"path":"Marx bless, no bugs","type":"external","label":"` + label + `"}`)
+	payload2 := bytes.NewBuffer(nil)
+	gw2 := gzip.NewWriter(payload2)
+	tw2 := tar.NewWriter(gw2)
+
+	if err := writePackage(tw2, "code.tar.gz", payload1.Bytes()); err != nil {
+		return nil, errors.WithMessage(err, "fail to generate code.tar.gz")
+	}
+	if err := writePackage(tw2, "metadata.json", content); err != nil {
+		return nil, errors.WithMessage(err, "fail to generate metadata.json")
 	}
 
-	// generate metadata.json
-	metadata, err := json.Marshal(lcpackager.PackageMetadata{
-		Path: "Marx bless, no bugs",
-		Type: "external",
-		Label: label,
-	})
+	err = tw2.Close()
+	if err == nil {
+		err = gw2.Close()
+	}
 	if err != nil {
 		return nil, err
 	}
-	f, err = os.Create(filepath.Join(cc.GetCCPath(), "metadata.json"))
+
+	return payload2.Bytes(), nil
+}
+func writePackage(tw *tar.Writer, name string, payload []byte) error {
+	err := tw.WriteHeader(
+		&tar.Header{
+			Name: name,
+			Size: int64(len(payload)),
+			Mode: 0100644,
+		},
+	)
 	if err != nil {
-		return nil, err
-	}
-	if _, err := f.Write(metadata); err != nil {
-		return nil, err
-	}
-	f.Close()
-
-	// generate external package
-	// tar cfz label.tgz metadata.json code.tar.gz
-	if _, _, err := tools.ExecCommand("tar", "cfz",
-		filepath.Join(cc.GetCCPath(), fmt.Sprintf("%s.tgz", label)),
-		filepath.Join(cc.GetCCPath(), "metadata.json"),
-		filepath.Join(cc.GetCCPath(), "code.tar.gz")); err != nil {
-		return nil, err
+		return err
 	}
 
-	f, err = os.Open(filepath.Join(cc.GetCCPath(), fmt.Sprintf("%s.tgz", label)))
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	if _, err := f.Read(ccPkg); err != nil {
-		return nil, err
-	}
-	return ccPkg, nil
+	_, err = tw.Write(payload)
+	return err
 }

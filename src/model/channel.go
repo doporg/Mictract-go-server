@@ -26,13 +26,16 @@ import (
 )
 
 type Channel struct {
-	ID            int 	`json:"id"`
-	Name          string        `json:"name"`
-	NetworkID   int        `json:"networkID"`
-	Organizations Organizations `json:"organizations"`
-	Orderers      Orders        `json:"orderers"`
+	ID            int 					`json:"id"`
+	Name          string        		`json:"name"`
+	NetworkID     int        			`json:"networkID"`
+	Organizations Organizations 		`json:"organizations"`
+	Orderers      Orders        		`json:"orderers"`
 
-	Status 	string 	`json:"status"`
+	// update it when commitCC success
+	Chaincodes     []ChaincodeInstance	`json:"chaincodes"`
+
+	Status 		  string 				`json:"status"`
 }
 
 type Channels []Channel
