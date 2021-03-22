@@ -79,7 +79,6 @@ func watch(m K8sModel, cb *callback) {
 				oldPhase, newPhase := oldPod.Status.Phase, newPod.Status.Phase
 
 				if oldPhase != newPhase {
-					fn(oldPhase, newPhase)
 					if removable := fn(oldPhase, newPhase); removable {
 						cbs.Remove(e)
 					}
