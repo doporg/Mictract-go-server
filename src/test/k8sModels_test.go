@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	mysql		= &kubernetes.Mysql{}
 	tools 		= &kubernetes.Tools{}
 	ordererCA	= kubernetes.NewOrdererCA(1)
 	org1PeerCA	= kubernetes.NewPeerCA(1, 1)
@@ -66,7 +65,7 @@ func TestInformer(t *testing.T) {
 
 func TestWatch(t *testing.T) {
 	tools.Watch()
-	tools.AddPodPhaseUpdateHandler(func(_ v1.PodPhase, new v1.PodPhase) {
+	tools.AddPodPhaseUpdateOnceHandler(func(_ v1.PodPhase, new v1.PodPhase) {
 		switch new {
 		case "Running":
 			global.Logger.Info("pod is running", zap.String("phase", string(new)))
@@ -111,10 +110,13 @@ func TestDeleteOrdererCA(t *testing.T) {
 	ordererCA.Delete()
 }
 
-func TestCreateMysql(t *testing.T) {
-	mysql.Create()
-}
+func TestAwaitableCreateOnCA(t *testing.T) {
+	ca := kubernetes.NewPeerCA(1, 1)
 
-func TestDeleteMysql(t *testing.T) {
-	mysql.Delete()
+	global.Logger.Info("peer ca starts creating")
+	err := ca.AwaitableCreate()
+	global.Logger.Info("peer ca has been created synchronously")
+	assert.Equal(t, true, err == nil)
+
+	ca.Delete()
 }

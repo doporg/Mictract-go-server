@@ -35,6 +35,7 @@ func createTables() {
 	err := global.DB.AutoMigrate(
 		model.User{},
 		model.Network{},
+		model.Chaincode{},
 	)
 
 

@@ -3,7 +3,9 @@ package api
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"mictract/enum"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
@@ -23,7 +25,7 @@ func AddChannel(c *gin.Context) {
 
 	netID := model.NewCaUserFromDomainName(info.NetworkName).NetworkID
 	orgIDs := []int{}
-	for _, orgName := range info.Orgs {
+	for _, orgName := range info.Organizations {
 		orgUser := model.NewCaUserFromDomainName(orgName)
 		if orgUser.NetworkID != netID {
 			response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
@@ -42,14 +44,23 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	if err := net.AddChannel(orgIDs); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
+	newChID := len(net.Channels) + 1
 
-	net, _ = model.GetNetworkfromNets(net.ID)
+	go func() {
+		if err := net.AddChannel(orgIDs); err != nil {
+			n, _ := model.GetNetworkfromNets(netID)
+			if newChID <= len(n.Channels) {
+				n.Channels[newChID - 1].Status = "error"
+			}
+			model.UpdateNets(*n)
+			global.Logger.Error("fail to add channel", zap.Error(err))
+			return
+		}
+		n, _ := model.GetNetworkfromNets(netID)
+		n.Channels[newChID - 1].Status = "running"
+		model.UpdateNets(*n)
+	}()
+
 	response.Ok().
 		Result(c.JSON)
 }

@@ -24,10 +24,18 @@ updateAnchors() {
 	createConfigUpdate ${CHANNEL_NAME} $WORKDIR/gen/config.json $WORKDIR/gen/modified_config.json $WORKDIR/org_update_in_envelope.pb
 }
 
+# just for some channel
 addOrg() {
 	configtxgen -configPath $WORKDIR -printOrg ${MSPID} >$WORKDIR/gen/org.json
 	jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups": {"'${MSPID}'":.[1]}}}}}' $WORKDIR/gen/config.json $WORKDIR/gen/org.json > $WORKDIR/gen/modified_config.json
 	createConfigUpdate ${CHANNEL_NAME} $WORKDIR/gen/config.json $WORKDIR/gen/modified_config.json $WORKDIR/org_update_in_envelope.pb
+}
+
+# will modify system-channel
+addOrgToConsortium() {
+  configtxgen -configPath $WORKDIR -printOrg ${MSPID} >$WORKDIR/gen/org.json
+  jq -s '.[0] * {"channel_group":{"groups":{"Consortiums":{"groups":{"SampleConsortium":{"groups":{"'${MSPID}'":.[1]}}}}}}} * {"channel_group":{"groups":{"Consortiums":{"groups":{"lilingj.github.io":.[0].channel_group.groups.Consortiums.groups.SampleConsortium}}}}}' $WORKDIR/gen/config.json $WORKDIR/gen/org.json > $WORKDIR/gen/modified_config.json
+  createConfigUpdate ${CHANNEL_NAME} $WORKDIR/gen/config.json $WORKDIR/gen/modified_config.json $WORKDIR/org_update_in_envelope.pb
 }
 
 addOrderers() {
@@ -52,6 +60,8 @@ elif [ "${MODE}" == "updateAnchors" ]; then
 	updateAnchors
 elif [ "${MODE}" == "addOrderers" ]; then
 	addOrderers
+elif [ "${MODE}" == "addOrgToConsortium" ]; then
+  addOrgToConsortium
 else
 	echo "check your args"
 fi

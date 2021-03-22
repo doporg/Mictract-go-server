@@ -2,7 +2,9 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"mictract/enum"
+	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
@@ -35,35 +37,50 @@ func AddOrg(c *gin.Context) {
 		return
 	}
 
-	orgID := len(net.Organizations)
-	if err := net.AddOrg(); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
+	newOrgID := len(net.Organizations)
 
-	// add rest peer
-	org, err := model.GetOrgFromNets(orgID, netID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	for i := 1; i < info.PeerCount; i++ {
-		if err := org.AddPeer(); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-				SetMessage(err.Error()).
-				Result(c.JSON)
+	go func(){
+		orgID := len(net.Organizations)
+		if err := net.AddOrg(); err != nil {
+			n, _ := model.GetNetworkfromNets(net.ID)
+			if newOrgID < len(n.Organizations) {
+				n.Organizations[newOrgID].Status = "error"
+			}
+			model.UpdateNets(*n)
+			global.Logger.Error("fail to add org", zap.Error(err))
 			return
 		}
-	}
 
-	net, _ = model.GetNetworkfromNets(net.ID)
+		// add rest peer
+		org, err := model.GetOrgFromNets(orgID, netID)
+		if err != nil {
+			n, _ := model.GetNetworkfromNets(net.ID)
+			if newOrgID < len(n.Organizations) {
+				n.Organizations[newOrgID].Status = "error"
+			}
+			model.UpdateNets(*n)
+			global.Logger.Error("fail to get org from Nets", zap.Error(err))
+			return
+		}
+		for i := 1; i < info.PeerCount; i++ {
+			if err := org.AddPeer(); err != nil {
+				n, _ := model.GetNetworkfromNets(net.ID)
+				if newOrgID < len(n.Organizations) {
+					n.Organizations[newOrgID].Status = "error"
+				}
+				model.UpdateNets(*n)
+				global.Logger.Error("fail to add rest peer", zap.Error(err))
+				return
+			}
+		}
+		n, _ := model.GetNetworkfromNets(net.ID)
+		n.Organizations[newOrgID].Status = "running"
+		model.UpdateNets(*n)
+		return
+	}()
+
 
 	response.Ok().
-		SetPayload(response.NewOrg(net.Organizations[len(net.Organizations) -1])).
 		Result(c.JSON)
 
 }
@@ -71,7 +88,7 @@ func AddOrg(c *gin.Context) {
 // GET /api/organization
 func ListOrganizations(c *gin.Context) {
 	info := struct {
-		NetworkUrl string `form:"networkUrl" binding:"required"`
+		NetworkUrl string `form:"networkUrl"`
 	}{}
 
 	if err := c.ShouldBindQuery(&info); err != nil {
@@ -81,21 +98,40 @@ func ListOrganizations(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(
-		model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
+	if info.NetworkUrl == "" {
+		nets, err := model.QueryAllNetwork()
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+		}
+		orgs := []response.Organization{}
+		for _, net := range nets {
+			if len(net.Organizations) >= 2 {
+				orgs = response.NewOrgs(net.Organizations[1:])
+			}
+		}
+		response.Ok().
+			SetPayload(orgs).
 			Result(c.JSON)
-		return
-	}
 
-	orgs := []response.Organization{}
-	if len(net.Organizations) >= 2 {
-		orgs = response.NewOrgs(net.Organizations[1:])
-	}
+	} else {
+		net, err := model.GetNetworkfromNets(
+			model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
 
-	response.Ok().
-		SetPayload(orgs).
-		Result(c.JSON)
+		orgs := []response.Organization{}
+		if len(net.Organizations) >= 2 {
+			orgs = response.NewOrgs(net.Organizations[1:])
+		}
+
+		response.Ok().
+			SetPayload(orgs).
+			Result(c.JSON)
+	}
 }

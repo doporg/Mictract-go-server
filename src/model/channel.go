@@ -26,11 +26,16 @@ import (
 )
 
 type Channel struct {
-	ID            int 	`json:"id"`
-	Name          string        `json:"name"`
-	NetworkID   int        `json:"networkID"`
-	Organizations Organizations `json:"organizations"`
-	Orderers      Orders        `json:"orderers"`
+	ID            int 					`json:"id"`
+	Name          string        		`json:"name"`
+	NetworkID     int        			`json:"networkID"`
+	Organizations Organizations 		`json:"organizations"`
+	Orderers      Orders        		`json:"orderers"`
+
+	// update it when commitCC success
+	Chaincodes     []ChaincodeInstance	`json:"chaincodes"`
+
+	Status 		  string 				`json:"status"`
 }
 
 type Channels []Channel
@@ -116,7 +121,7 @@ func GetSystemChannel(netID int) (*Channel, error) {
 		Name: "system-channel",
 		NetworkID: netID,
 		Organizations: []Organization{net.Organizations[0]},
-		Orderers: Orders{},
+		Orderers: net.Orders,
 	}, nil
 }
 
