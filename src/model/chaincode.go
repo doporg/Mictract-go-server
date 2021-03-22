@@ -152,7 +152,7 @@ func (cc *Chaincode)PackageExternalCC(label, address string) (ccPkg []byte, err 
 		return nil, err
 	}
 
-	content = []byte(`{"path":"Marx bless, no bugs","type":"external","label":"` + label + `"}`)
+	content = []byte(`{"path":"","type":"external","label":"` + label + `"}`)
 	payload2 := bytes.NewBuffer(nil)
 	gw2 := gzip.NewWriter(payload2)
 	tw2 := tar.NewWriter(gw2)
