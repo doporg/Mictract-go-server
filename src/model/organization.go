@@ -157,10 +157,8 @@ func (org *Organization)CreateBasicOrganizationEntity() error {
 	}
 	global.Logger.Info("peer ca has been created synchronously")
 
-
-	// TODO: sync
-	// 等待nfs同步文件
-	time.Sleep(5 * time.Second)
+	// Wait for the ca program to start
+	time.Sleep(15 * time.Second)
 
 	// 从ca的挂载目录里取出ca证书，构建组织msp
 	global.Logger.Info("The msp of the organization is being built...")
