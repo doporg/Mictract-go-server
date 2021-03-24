@@ -590,3 +590,13 @@ func (c *Channel) RenderConfigtx() error {
 
 	return nil
 }
+
+func (c *Channel) RemoveAllEntity() {
+	global.Logger.Info("CC Entity is being removed...")
+	for _, cci := range c.Chaincodes {
+		kubernetes.NewChaincode(cci.NetworkID, cci.ChannelID, cci.PackageID, cci.CCID).Delete()
+		if err := DeleteChaincodeByID(cci.CCID); err != nil {
+			global.Logger.Error("fail to rm cc", zap.Error(err))
+		}
+	}
+}

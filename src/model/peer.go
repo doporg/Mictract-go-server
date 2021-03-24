@@ -42,6 +42,9 @@ func (peer *Peer) GetURL() string {
 
 func (peer *Peer)JoinChannel(channelID, ordererURL string) error {
 	user := NewCaUserFromDomainName(peer.Name)
+	if err := UpdateSDK(user.NetworkID); err != nil {
+		return err
+	}
 	sdk, err:= GetSDKByNetWorkID(user.NetworkID)
 	if err != nil {
 		return errors.WithMessage(err, "fail to get sdk ")
