@@ -52,5 +52,11 @@ func GetRouter() (router *gin.Engine) {
 		BlockRouter.GET("/", api.GetBlockByBlockID)
 	}
 
+	CCRouter := APIRoute.Group("chaincode")
+	{
+		CCRouter.POST("/", api.CreateChaincode)
+		CCRouter.POST("/:id", api.InvokeChaincode)
+		CCRouter.GET("/", api.ListChaincodes)
+	}
 	return
 }

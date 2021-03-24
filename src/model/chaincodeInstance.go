@@ -93,6 +93,12 @@ func (cc *Chaincode)NewChaincodeInstance(networkID, channelID int,
 		return &ChaincodeInstance{}, errors.WithMessage(err, "check your policyStr")
 	}
 
+	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
+	if err != nil {
+		return nil, err
+	}
+	c.Chaincodes = append(c.Chaincodes, *cci)
+	UpdateNets(*c)
 	// debug：使用安装后得到的链码ID
 	// 说明：这种方式获取的外部链码ID与安装后得到的ID不一样
 	// 原因：未知
@@ -159,9 +165,20 @@ func (cci *ChaincodeInstance)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...s
 
 	if len(resps) > 0 && cci.PackageID != resps[0].PackageID {
 		cci.PackageID = resps[0].PackageID
-	} else {
+	} else if len(resps) <= 0{
 		return errors.New("Chaincode installation error")
 	}
+
+	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
+	if err != nil {
+		return err
+	}
+	for i, _ := range c.Chaincodes {
+		if c.Chaincodes[i].CCID == cci.CCID {
+			c.Chaincodes[i] = *cci
+		}
+	}
+	UpdateNets(*c)
 
 	global.Logger.Info("chaincode installed successfully")
 	for _, resp := range resps {
@@ -239,7 +256,7 @@ func (cci *ChaincodeInstance)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client, 
 	return &resp.Approvals, nil
 }
 
-func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl string) error {
+func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl string, peerURLs ...string) error {
 	global.Logger.Info("commit chaincode...")
 
 	//ccPolicy := policydsl.SignedByAnyMember([]string{"Org1MSP"})
@@ -261,19 +278,13 @@ func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl str
 		fmt.Sprintf("channel%d", cci.ChannelID),
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
-		resmgmt.WithOrdererEndpoint(ordererUrl))
+		resmgmt.WithOrdererEndpoint(ordererUrl),
+		resmgmt.WithTargetEndpoints(peerURLs...))
 	if err != nil {
 		return err
 	}
 
 	global.Logger.Info("txID: " + string(txID))
-
-	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
-	if err != nil {
-		return err
-	}
-	c.Chaincodes = append(c.Chaincodes, *cci)
-	UpdateNets(*c)
 
 	return nil
 }
@@ -341,10 +352,10 @@ func (cci *ChaincodeInstance)InitCC(channelClient *channel.Client, args []string
 // the program seems to automatically find peers that meet the policy to endorse.
 // If specified,
 // you must be responsible for satisfying the endorsement strategy
-func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []string, peerURLs ...string) ([]byte, error) {
+func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
 	_args := [][]byte{}
 	if len(args) < 1{
-		return []byte{}, errors.New("check your args!")
+		return channel.Response{}, errors.New("check your args!")
 	} else if len(args) > 1 {
 		_args = packArgs(args[1:])
 	}
@@ -358,17 +369,17 @@ func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []str
 		channel.WithTargetEndpoints(peerURLs...),
 	)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to execute chaincode！")
+		return channel.Response{}, errors.WithMessage(err, "fail to execute chaincode！")
 	}
 
-	return response.Payload, err
+	return response, err
 }
 
 // eg: QueryCC(cc, "mycc", []string{"Query", "a"}, "peer0.org1.example.com")
-func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []string, peerURLs ...string) ([]byte, error) {
+func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
 	_args := [][]byte{}
 	if len(args) < 1{
-		return []byte{}, errors.New("check your args!")
+		return channel.Response{}, errors.New("check your args!")
 	} else if len(args) > 1 {
 		_args = packArgs(args[1:])
 	}
@@ -382,9 +393,9 @@ func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []strin
 		channel.WithTargetEndpoints(peerURLs...),
 	)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to execute qeury！")
+		return channel.Response{}, errors.WithMessage(err, "fail to execute qeury！")
 	}
-	return response.Payload, nil
+	return response, nil
 }
 
 func (cci *ChaincodeInstance) Build() error {

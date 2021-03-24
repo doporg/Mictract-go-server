@@ -313,6 +313,10 @@ func (n *Network) RemoveAllEntity() {
 	for _, org := range n.Organizations {
 		org.RemoveAllEntity()
 	}
+
+	for _, ch := range n.Channels {
+		ch.RemoveAllEntity()
+	}
 }
 
 func (n *Network) RemoveAllFile() {
@@ -823,7 +827,9 @@ func (n *Network) AddChannel(orgIDs []int) error {
 	}
 
 	for _, peer := range channel.Organizations[0].Peers {
-		peer.JoinChannel(fmt.Sprintf("channel%d", channel.ID), channel.Orderers[0].Name)
+		if err := peer.JoinChannel(fmt.Sprintf("channel%d", channel.ID), channel.Orderers[0].Name); err != nil {
+			return err
+		}
 	}
 
 	for i := 1; i < len(orgIDs); i++ {
@@ -832,6 +838,9 @@ func (n *Network) AddChannel(orgIDs []int) error {
 			return err
 		}
 	}
+	// bug: orderer处理更新配置文件需要时间, 加入通道操作在orderer还每处理完通道配置更新交易就提交上去，
+	//      会导致身份识别错误。注意这个玄学问题
+	time.Sleep(5 * time.Second)
 
 	c, err := GetChannelFromNets(channel.ID, channel.NetworkID)
 	if err != nil {
@@ -841,7 +850,8 @@ func (n *Network) AddChannel(orgIDs []int) error {
 		org := channel.Organizations[i]
 		for _, peer := range org.Peers {
 			if err := peer.JoinChannel(fmt.Sprintf("channel%d", c.ID), c.Orderers[0].Name); err != nil {
-				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.Name, c.ID))
+				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.Name, c.ID), zap.Error(err))
+				return err
 			}
 		}
 	}
