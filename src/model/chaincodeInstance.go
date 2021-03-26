@@ -3,16 +3,17 @@ package model
 import (
 	"database/sql/driver"
 	"fmt"
+	pb "github.com/hyperledger/fabric-protos-go/peer"
+	cb "github.com/hyperledger/fabric-protos-go/common"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
-	lcpackager "github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/lifecycle"
 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/policydsl"
 	"github.com/pkg/errors"
-	"log"
+	"mictract/config"
 	"mictract/global"
-
-	cb "github.com/hyperledger/fabric-protos-go/common"
+	"mictract/model/kubernetes"
+	"path/filepath"
 )
 
 // Chaincode on the channel
@@ -54,6 +55,15 @@ func (cci ChaincodeInstance) Value() (driver.Value, error) {
 	return value(cci)
 }
 
+func (cci *ChaincodeInstance) getAddress() string {
+	return fmt.Sprintf(
+		"%s-chaincode%d-channel%d-net%d:9999",
+		cci.Label,
+		cci.CCID,
+		cci.ChannelID,
+		cci.NetworkID)
+}
+
 // "OR('Org1MSP.member')"
 func (cc *Chaincode)NewChaincodeInstance(networkID, channelID int,
 	label, address, policyStr, version string,
@@ -75,25 +85,38 @@ func (cc *Chaincode)NewChaincodeInstance(networkID, channelID int,
 		CCID: cc.ID,
 	}
 
+	if address == "" {
+		cci.Address = cci.getAddress()
+	}
+
 	if _, err := cci.GeneratePolicy(); err != nil {
 		return &ChaincodeInstance{}, errors.WithMessage(err, "check your policyStr")
 	}
 
-	var ccPkg []byte
-	var err error
-	if excc {
-		ccPkg, err = cc.PackageExternalCC(label, address)
-		if err != nil {
-			return nil, errors.WithMessage(err, "fail to package external chaincode")
-		}
-	} else {
-		ccPkg, err = cc.PackageCC(label)
-		if err != nil {
-			return nil, errors.WithMessage(err, "fail to package chaincode")
-		}
+	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
+	if err != nil {
+		return nil, err
 	}
-
-	cci.PackageID = lcpackager.ComputePackageID(label, ccPkg)
+	c.Chaincodes = append(c.Chaincodes, *cci)
+	UpdateNets(*c)
+	// debug：使用安装后得到的链码ID
+	// 说明：这种方式获取的外部链码ID与安装后得到的ID不一样
+	// 原因：未知
+	//var ccPkg []byte
+	//var err error
+	//if excc {
+	//	ccPkg, err = cc.PackageExternalCC(label, address)
+	//	if err != nil {
+	//		return nil, errors.WithMessage(err, "fail to package external chaincode")
+	//	}
+	//} else {
+	//	ccPkg, err = cc.PackageCC(label)
+	//	if err != nil {
+	//		return nil, errors.WithMessage(err, "fail to package chaincode")
+	//	}
+	//}
+	//
+	//cci.PackageID = lcpackager.ComputePackageID(label, ccPkg)
 
 	return cci, nil
 }
@@ -139,6 +162,23 @@ func (cci *ChaincodeInstance)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...s
 	if err != nil {
 		return err
 	}
+
+	if len(resps) > 0 && cci.PackageID != resps[0].PackageID {
+		cci.PackageID = resps[0].PackageID
+	} else if len(resps) <= 0{
+		return errors.New("Chaincode installation error")
+	}
+
+	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
+	if err != nil {
+		return err
+	}
+	for i, _ := range c.Chaincodes {
+		if c.Chaincodes[i].CCID == cci.CCID {
+			c.Chaincodes[i] = *cci
+		}
+	}
+	UpdateNets(*c)
 
 	global.Logger.Info("chaincode installed successfully")
 	for _, resp := range resps {
@@ -216,7 +256,7 @@ func (cci *ChaincodeInstance)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client, 
 	return &resp.Approvals, nil
 }
 
-func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl string) error {
+func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl string, peerURLs ...string) error {
 	global.Logger.Info("commit chaincode...")
 
 	//ccPolicy := policydsl.SignedByAnyMember([]string{"Org1MSP"})
@@ -238,19 +278,13 @@ func (cci *ChaincodeInstance)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl str
 		fmt.Sprintf("channel%d", cci.ChannelID),
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
-		resmgmt.WithOrdererEndpoint(ordererUrl))
+		resmgmt.WithOrdererEndpoint(ordererUrl),
+		resmgmt.WithTargetEndpoints(peerURLs...))
 	if err != nil {
 		return err
 	}
 
 	global.Logger.Info("txID: " + string(txID))
-
-	c, err := GetChannelFromNets(cci.ChannelID, cci.NetworkID)
-	if err != nil {
-		return err
-	}
-	c.Chaincodes = append(c.Chaincodes, *cci)
-	UpdateNets(*c)
 
 	return nil
 }
@@ -267,7 +301,7 @@ func (cci *ChaincodeInstance)QueryCommittedCC(orgResMgmt *resmgmt.Client) error 
 	if err != nil {
 		return err
 	}
-	log.Println(resps)
+	global.Logger.Info(fmt.Sprintf("%v", resps))
 	for _, resp := range resps {
 		if resp.Name == cci.Label {
 			return nil
@@ -289,7 +323,7 @@ func packArgs(paras []string) [][]byte {
 
 // shell批准时指定--init-required，或者sdk批准时指定 InitRequired = true，
 // 运行链码时都需要先初始化链码，用--isInit或者IsInit: true
-func (cci *ChaincodeInstance)InitCC(channelClient *channel.Client, args []string) (channel.Response, error) {
+func (cci *ChaincodeInstance)InitCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
 	if !cci.InitRequired {
 		return channel.Response{}, errors.New("This chaincode does not need init")
 	}
@@ -306,6 +340,7 @@ func (cci *ChaincodeInstance)InitCC(channelClient *channel.Client, args []string
 			Args: _args,
 			IsInit: true},
 		channel.WithRetry(retry.DefaultChannelOpts),
+		channel.WithTargetEndpoints(peerURLs...),
 	)
 	if err != nil {
 		return response, errors.WithMessage(err, "fail to init chaincode")
@@ -317,10 +352,10 @@ func (cci *ChaincodeInstance)InitCC(channelClient *channel.Client, args []string
 // the program seems to automatically find peers that meet the policy to endorse.
 // If specified,
 // you must be responsible for satisfying the endorsement strategy
-func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []string, peerURLs ...string) ([]byte, error) {
+func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
 	_args := [][]byte{}
 	if len(args) < 1{
-		return []byte{}, errors.New("check your args!")
+		return channel.Response{}, errors.New("check your args!")
 	} else if len(args) > 1 {
 		_args = packArgs(args[1:])
 	}
@@ -334,17 +369,17 @@ func (cci *ChaincodeInstance)ExecuteCC(channelClient *channel.Client, args []str
 		channel.WithTargetEndpoints(peerURLs...),
 	)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to execute chaincode！")
+		return channel.Response{}, errors.WithMessage(err, "fail to execute chaincode！")
 	}
 
-	return response.Payload, err
+	return response, err
 }
 
 // eg: QueryCC(cc, "mycc", []string{"Query", "a"}, "peer0.org1.example.com")
-func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []string, peerURLs ...string) ([]byte, error) {
+func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
 	_args := [][]byte{}
 	if len(args) < 1{
-		return []byte{}, errors.New("check your args!")
+		return channel.Response{}, errors.New("check your args!")
 	} else if len(args) > 1 {
 		_args = packArgs(args[1:])
 	}
@@ -358,7 +393,51 @@ func (cci *ChaincodeInstance)QueryCC(channelClient *channel.Client, args []strin
 		channel.WithTargetEndpoints(peerURLs...),
 	)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to execute qeury！")
+		return channel.Response{}, errors.WithMessage(err, "fail to execute qeury！")
 	}
-	return response.Payload, nil
+	return response, nil
+}
+
+func (cci *ChaincodeInstance) Build() error {
+	cc, err := GetChaincodeByID(cci.CCID)
+	if err != nil {
+		return err
+	}
+
+	if cc.Type != pb.ChaincodeSpec_GOLANG {
+		return errors.New("Only supports golang")
+	}
+
+	tools := kubernetes.Tools{}
+	if _, _, err := tools.ExecCommand(
+		filepath.Join(config.LOCAL_SCRIPTS_PATH, "external", "build.sh"),
+		filepath.Join(cc.GetCCPath(), "chaincode"),
+		filepath.Join(cc.GetCCPath(), "src")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cci *ChaincodeInstance) CreateEntity() error {
+	cc, err := GetChaincodeByID(cci.CCID)
+	if err != nil {
+		return err
+	}
+
+	if cc.Type != pb.ChaincodeSpec_GOLANG {
+		return errors.New("Currently only supports golang, please manually start other language chaincodes")
+	}
+
+	global.Logger.Info("Starting external chaincode")
+	if err := kubernetes.NewChaincode(cci.NetworkID, cci.ChannelID, cci.PackageID, cci.CCID).AwaitableCreate(); err != nil {
+		return err
+	}
+	global.Logger.Info("Successful start of external chaincode")
+	return nil
+}
+
+func (cci *ChaincodeInstance) RemoveEntity()  {
+	global.Logger.Info("Removing external chaincode")
+	kubernetes.NewChaincode(cci.NetworkID, cci.ChannelID, cci.PackageID, cci.CCID).Delete()
 }

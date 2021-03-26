@@ -5,21 +5,23 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	pb "github.com/hyperledger/fabric-protos-go/peer"
+	lcpackager "github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/lifecycle"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	"mictract/config"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"os"
 	"path/filepath"
-
-	pb "github.com/hyperledger/fabric-protos-go/peer"
-	lcpackager "github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/lifecycle"
 )
 
 // Local chaincode
 type Chaincode struct {
 	ID  		int		                    `json:"id" gorm:"primarykey"`
 	Type        pb.ChaincodeSpec_Type		`json:"type"`
+	// unpacking or success or error
+	Status 		string						`json:"status"`
 	// temp
 	Nickname	string	                    `json:"nickname"`
 }
@@ -30,9 +32,26 @@ func (c *Chaincode)GetCCPath() string {
 		fmt.Sprintf("chaincode%d", c.ID))
 }
 
+func (cc *Chaincode)Unpack() error {
+	// tar zxvf src.tar.gz
+	tools := kubernetes.Tools{}
+	if _, _, err := tools.ExecCommand(
+		"tar",
+		"zxvf",
+		filepath.Join(cc.GetCCPath(), "src.tar.gz"),
+		"-C",
+		cc.GetCCPath()); err != nil {
+		global.Logger.Error("fail to unpack cc ", zap.Error(err))
+		cc.Status = "error"
+		UpdateChaincode(cc)
+		return err
+	}
+	return nil
+}
+
 //
 // tar czf src.tar.gz src
-func NewChaincode(codeTarGz []byte, nickname string, ccType string) (*Chaincode, error){
+func NewChaincode(nickname string, ccType string) (*Chaincode, error){
 	_ccType := pb.ChaincodeSpec_UNDEFINED
 	switch ccType {
 	case "go", "Go", "golang", "Golang":
@@ -47,6 +66,7 @@ func NewChaincode(codeTarGz []byte, nickname string, ccType string) (*Chaincode,
 	cc := Chaincode{
 		Nickname: nickname,
 		Type: _ccType,
+		Status: "unpacking",
 	}
 
 	if err := global.DB.Create(&cc).Error; err != nil {
@@ -59,28 +79,7 @@ func NewChaincode(codeTarGz []byte, nickname string, ccType string) (*Chaincode,
 		return &Chaincode{}, err
 	}
 
-	f, err := os.Create(filepath.Join(cc.GetCCPath(), "src.tar.gz"));
-	if  err != nil {
-		return &Chaincode{}, err
-	}
-	defer f.Close()
-
-	if _, err := f.Write(codeTarGz); err != nil {
-		return &Chaincode{}, err
-	}
-
-	// tar zxvf src.tar.gz
-	tools := kubernetes.Tools{}
-	if _, _, err := tools.ExecCommand(
-		"tar",
-		"zxvf",
-		filepath.Join(cc.GetCCPath(), "src.tar.gz"),
-		"-C",
-		cc.GetCCPath()); err != nil {
-		return &Chaincode{}, err
-	}
-
-	return &Chaincode{}, nil
+	return &cc, nil
 }
 
 func GetChaincodeByID(ccID int) (*Chaincode, error) {
@@ -110,6 +109,24 @@ func ListAllChaincodes() ([]Chaincode, error) {
 		return []Chaincode{}, err
 	}
 	return ccs, nil
+}
+
+func UpdateChaincodeNickname(ccID int, newNickname string) error {
+	if err := global.DB.Model(&Chaincode{}).
+		Where("id = ?", ccID).
+		Updates(Chaincode{Nickname: newNickname}).Error; err != nil {
+		return errors.WithMessage(err, "Fail to update")
+	}
+	return nil
+}
+
+func UpdateChaincode(cc *Chaincode) error {
+	if err := global.DB.Model(&Chaincode{}).
+		Where("id = ?", cc.ID).
+		Updates(cc).Error; err != nil {
+		return errors.WithMessage(err, "Fail to update")
+	}
+	return nil
 }
 
 func (cc *Chaincode)PackageCC(ccLabel string) (ccPkg []byte, err error) {
@@ -152,7 +169,7 @@ func (cc *Chaincode)PackageExternalCC(label, address string) (ccPkg []byte, err 
 		return nil, err
 	}
 
-	content = []byte(`{"path":"Marx bless, no bugs","type":"external","label":"` + label + `"}`)
+	content = []byte(`{"path":"","type":"external","label":"` + label + `"}`)
 	payload2 := bytes.NewBuffer(nil)
 	gw2 := gzip.NewWriter(payload2)
 	tw2 := tar.NewWriter(gw2)
