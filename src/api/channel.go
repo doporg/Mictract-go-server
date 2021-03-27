@@ -47,7 +47,7 @@ func AddChannel(c *gin.Context) {
 	newChID := len(net.Channels) + 1
 
 	go func() {
-		if err := net.AddChannel(orgIDs); err != nil {
+		if err := net.AddChannel(orgIDs, info.Nickname); err != nil {
 			n, _ := model.GetNetworkfromNets(netID)
 			if newChID <= len(n.Channels) {
 				n.Channels[newChID - 1].Status = "error"

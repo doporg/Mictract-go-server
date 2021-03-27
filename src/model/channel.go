@@ -28,6 +28,7 @@ import (
 type Channel struct {
 	ID            int 					`json:"id"`
 	Name          string        		`json:"name"`
+	Nickname	  string 				`json:"nickname"`
 	NetworkID     int        			`json:"networkID"`
 	Organizations Organizations 		`json:"organizations"`
 	Orderers      Orders        		`json:"orderers"`
@@ -119,6 +120,7 @@ func GetSystemChannel(netID int) (*Channel, error) {
 	return &Channel{
 		ID: -1,
 		Name: "system-channel",
+		Nickname: "fuckNickname",
 		NetworkID: netID,
 		Organizations: []Organization{net.Organizations[0]},
 		Orderers: net.Orders,
@@ -334,7 +336,7 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 // AddOrg uses the existing organization's certificate to update the configuration of the channel
 func (c *Channel) AddOrg(orgID int) error {
 	global.Logger.Info(fmt.Sprintf("Add org%d to channel%d", orgID, c.ID))
-	org := GetBasicOrg(orgID, c.NetworkID)
+	org := GetBasicOrg(orgID, c.NetworkID, "temp")
 
 	global.Logger.Info("Obtaining channel config...")
 	if err := c.getAndStoreConfig(); err != nil {

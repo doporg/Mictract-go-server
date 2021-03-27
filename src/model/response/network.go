@@ -7,15 +7,16 @@ import (
 )
 
 type Network struct {
-	Name string `json:"name"`
-	Consensus string `json:"consensus"`
-	TlsEnabled bool `json:"tlsEnabled"`
-	Status string `json:"status"`
-	CreateTime string `json:"createTime"`
-	Orderers []string `json:"orderers"`
-	Organizations []Organization `json:"organizations"`
-	Users []User `json:"users"`
-	Channels []Channel `json:"channels"`
+	Name 			string 			`json:"name"`
+	Nickname 		string 			`json:"nickname"`
+	Consensus 		string 			`json:"consensus"`
+	TlsEnabled 		bool 			`json:"tlsEnabled"`
+	Status 			string 			`json:"status"`
+	CreateTime 		string 			`json:"createTime"`
+	Orderers 		[]string 		`json:"orderers"`
+	Organizations 	[]Organization 	`json:"organizations"`
+	Users 			[]User 			`json:"users"`
+	Channels 		[]Channel		 `json:"channels"`
 }
 
 func NewNetwork(n model.Network) Network {
@@ -25,6 +26,7 @@ func NewNetwork(n model.Network) Network {
 	}
 	ret := Network{
 		Name: fmt.Sprintf("net%d.com", n.ID),
+		Nickname: n.Nickname,
 		Consensus: n.Consensus,
 		TlsEnabled: n.TlsEnabled,
 		Status: n.Status,

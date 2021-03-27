@@ -18,6 +18,7 @@ type Organization struct {
 	ID int `json:"id"`
 	NetworkID	int	`json:"networkid"`
 	Name        string `json:"name"`
+	Nickname	string `json:"nickname"`
 	MSPID       string `json:"mspid"`
 
 	Peers       Peers  `json:"peers"`
@@ -114,12 +115,13 @@ func (org *Organization) GetAdminSigningIdentity() (msp.SigningIdentity, error){
 
 // eg: GetBasicOrg(1, 1).CreateBasicOrganizationEntity()
 // eg: GetBasicOrg(1, 1).CreateNodeEntity()
-func GetBasicOrg(orgID, netID int) *Organization {
+func GetBasicOrg(orgID, netID int, nickname string) *Organization {
 	if orgID == -1 {
 		return &Organization{
 			ID: orgID,
 			NetworkID: netID,
 			Name: "ordererorg",
+			Nickname: nickname,
 			MSPID: "ordererMSP",
 			Peers: []Peer{},
 			Users: []string{},
@@ -129,6 +131,7 @@ func GetBasicOrg(orgID, netID int) *Organization {
 		return &Organization{
 			ID: orgID,
 			Name: fmt.Sprintf("org%d", orgID),
+			Nickname: nickname,
 			NetworkID: netID,
 			MSPID: fmt.Sprintf("org%dMSP", orgID),
 			Peers: []Peer{},

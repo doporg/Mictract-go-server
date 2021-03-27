@@ -31,6 +31,13 @@ func CreateNetwork(c *gin.Context) {
 
 	fmt.Println(info)
 
+	if len(info.PeerCounts) != len(info.OrgNicknames) {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("Organization information does not match").
+			Result(c.JSON)
+		return
+	}
+
 	if info.Consensus != "solo" && info.Consensus != "etcdraft" {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage("The consensus protocol only supports solo and etcdraft").
@@ -71,8 +78,8 @@ func CreateNetwork(c *gin.Context) {
 	// check if the network name has existed.
 	// check if the new network configuration could be saved.
 	go func() {
-		net := model.GetBasicNetwork(info.Consensus)
-		if err := net.Deploy(); err != nil {
+		net := model.GetBasicNetwork(info.Consensus, info.Nickname)
+		if err := net.Deploy(info.OrgNicknames[0]); err != nil {
 			net, _ = model.GetNetworkfromNets(net.ID)
 			net.Status = "error"
 			model.UpdateNets(*net)
@@ -82,7 +89,7 @@ func CreateNetwork(c *gin.Context) {
 
 		// add rest org
 		for i := 1; i < len(info.PeerCounts); i++ {
-			if err := net.AddOrg(); err != nil {
+			if err := net.AddOrg(info.OrgNicknames[i]); err != nil {
 				net, _ = model.GetNetworkfromNets(net.ID)
 				net.Status = "error"
 				model.UpdateNets(*net)

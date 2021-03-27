@@ -37,6 +37,7 @@ type Network struct {
 	Status string `json:"status"`
 
 	Name          string        `json:"name" binding:"required"`
+	Nickname	  string 		`json:"nickname"`
 	Orders        Orders        `json:"orders" binding:"required" gorm:"type:text"`
 	Organizations Organizations `json:"organizations" binding:"required" gorm:"type:text"`
 	Channels      Channels      `json:"channels" gorm:"type:text"`
@@ -187,7 +188,7 @@ func GetNetworkfromNets(networkID int) (*Network, error) {
 
 // Get basic Network for deploy
 // eg: GetBasicNetWork().Deploy()
-func GetBasicNetwork(consensus string) *Network {
+func GetBasicNetwork(consensus string, nickname string) *Network {
 	netID := 0
 	for k, _ := range global.Nets {
 		curID, _ := strconv.Atoi(k[3:])
@@ -199,6 +200,7 @@ func GetBasicNetwork(consensus string) *Network {
 	return &Network{
 		ID: netID,
 		Name: fmt.Sprintf("net%d", netID),
+		Nickname: nickname,
 		Orders: []Order{},
 		Organizations: []Organization{},
 		Channels: []Channel{},
@@ -218,18 +220,19 @@ func (n *Network)InitNetsForThisNet() {
 // Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
 //	and then join the rest of peers and orderers.
 // The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
-func (n *Network) Deploy() (err error) {
+func (n *Network) Deploy(org1Nickname string) (err error) {
 	global.Logger.Info("Deploying network...")
 
 	global.Logger.Info("Initialize the network, update the global variable Nets")
 	n.InitNetsForThisNet()
 	n.Insert()
 
-	ordererOrg := GetBasicOrg(-1, n.ID)
-	org1 := GetBasicOrg(1, n.ID)
+	ordererOrg := GetBasicOrg(-1, n.ID, "ordererorg")
+	org1 := GetBasicOrg(1, n.ID, org1Nickname)
 	channel := Channel{
 		ID: 1,
 		Name: "channel1",
+		Nickname: "sample-channel",
 		NetworkID: n.ID,
 		Organizations: Organizations{
 			//*ordererOrg,
@@ -770,12 +773,12 @@ func (n *Network) AddOrgToConsortium(orgID int) error {
 }
 
 // AddOrg creates an organizational entity
-func (n *Network) AddOrg() error {
+func (n *Network) AddOrg(nickname string) error {
 	net, err := GetNetworkfromNets(n.ID)
 	if err != nil {
 		return err
 	}
-	org := GetBasicOrg(len(net.Organizations), net.ID)
+	org := GetBasicOrg(len(net.Organizations), net.ID, nickname)
 	if err := org.CreateBasicOrganizationEntity(); err != nil {
 		return err
 	}
@@ -793,10 +796,11 @@ func (n *Network) AddOrg() error {
 	return nil
 }
 
-func (n *Network) AddChannel(orgIDs []int) error {
+func (n *Network) AddChannel(orgIDs []int, nickname string) error {
 	channel := Channel{
 		ID: len(n.Channels) + 1,
 		Name: fmt.Sprintf("channel%d", len(n.Channels) + 1),
+		Nickname: nickname,
 		NetworkID: n.ID,
 		Organizations: []Organization{},
 		Orderers: []Order{n.Orders[0]},

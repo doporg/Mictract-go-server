@@ -41,7 +41,7 @@ func AddOrg(c *gin.Context) {
 
 	go func(){
 		orgID := len(net.Organizations)
-		if err := net.AddOrg(); err != nil {
+		if err := net.AddOrg(info.Nickname); err != nil {
 			n, _ := model.GetNetworkfromNets(net.ID)
 			if newOrgID < len(n.Organizations) {
 				n.Organizations[newOrgID].Status = "error"

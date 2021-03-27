@@ -7,6 +7,7 @@ import (
 
 type Organization struct {
 	Name 		string 		`json:"name"`
+	Nickname	string		`json:"nickname"`
 	Network 	string 		`json:"network"`
 	Peers 		[]string 	`json:"peers"`
 	Users 		[]string 	`json:"users"`
@@ -19,6 +20,7 @@ func NewOrg(o model.Organization) Organization {
 		Users: []string{},
 		Network: fmt.Sprintf("net%d.com", o.NetworkID),
 		Status: o.Status,
+		Nickname: o.Nickname,
 	}
 
 	// peers
