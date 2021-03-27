@@ -105,6 +105,13 @@ func DeleteNetworkByID(id int) error {
 	if err != nil {
 		return err
 	}
+	for _, org := range n.Organizations{
+		for i := 2; i < len(org.Users); i++ {
+			if err := DelUser(org.Users[i]); err != nil {
+				global.Logger.Error("fail to del user ", zap.Error(err))
+			}
+		}
+	}
 	n.RemoveAllEntity()
 	// n.RemoveAllFile()
 	delete(global.Nets, fmt.Sprintf("net%d", id))
