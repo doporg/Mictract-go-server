@@ -107,8 +107,8 @@ func DeleteNetworkByID(id int) error {
 		return err
 	}
 	for _, org := range n.Organizations{
-		for i := 2; i < len(org.Users); i++ {
-			if err := DelUser(org.Users[i]); err != nil {
+		for i := 1; i < len(org.Users); i++ {
+			if err := DelUser(NewCaUserFromDomainName(org.Users[i]).UserID); err != nil {
 				global.Logger.Error("fail to del user ", zap.Error(err))
 			}
 		}

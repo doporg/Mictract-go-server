@@ -14,9 +14,14 @@ type User struct {
 }
 
 func NewUser(u model.User) User {
-	user := model.NewCaUserFromDomainName(u.Username)
+	user := model.CaUser{
+		UserID: u.ID,
+		NetworkID: u.NetID,
+		OrganizationID: u.OrgID,
+		Type: u.UserType,
+	}
 	return User{
-		Name: u.Username,
+		Name: user.GetUsername(),
 		Role: u.UserType,
 		Nickname: u.Nickname,
 		Organization: fmt.Sprintf("org%d.net%d.com", user.OrganizationID, user.NetworkID),

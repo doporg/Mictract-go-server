@@ -21,13 +21,7 @@ func CreateUser(c *gin.Context) {
 			Result(c.JSON)
 		return
 	}
-
-	if info.Role != "user" {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("role temporarily only supports user").
-			Result(c.JSON)
-		return
-	}
+	
 
 	netID := model.NewCaUserFromDomainName(info.Network).NetworkID
 	orgUser := model.NewCaUserFromDomainName(info.Organization)
@@ -46,19 +40,24 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	var newUserID int
-
-	for i := len(org.Users) - 1; i >= 1; i-- {
-		tmpUser := model.NewCaUserFromDomainName(org.Users[i])
-		if tmpUser.Type == "user" {
-			newUserID = tmpUser.UserID + 1
-			break
-		}
+	// insert into db
+	var newUser *model.User
+	if newUser, err = model.NewUser(
+		orgUser.OrganizationID,
+		orgUser.NetworkID,
+		info.Nickname,
+		info.Role,
+		info.Password,
+		); err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
 	}
 
-	newUser := model.CaUser{
+	newCaUser := model.CaUser{
 		Type: "user",
-		UserID: newUserID,
+		UserID: newUser.ID,
 		OrganizationID: org.ID,
 		NetworkID: org.NetworkID,
 		Password: info.Password,
@@ -93,44 +92,28 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	if err := newUser.Register(mspClient); err != nil {
+	if err := newCaUser.Register(mspClient); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	// insert into db
-	if err := model.AddUser(info.Nickname, newUser.GetUsername()); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	if err := newUser.Enroll(mspClient, true); err != nil {
+	if err := newCaUser.Enroll(mspClient, true); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	if err := newUser.Enroll(mspClient, false); err != nil {
+	if err := newCaUser.Enroll(mspClient, false); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	users, err := model.QueryUserByUserName(newUser.GetUsername())
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
 	response.Ok().
-		SetPayload(response.NewUser(users[0])).
+		SetPayload(response.NewUser(*newUser)).
 		Result(c.JSON)
 }
 
@@ -225,7 +208,7 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := model.DelUser(causer.GetUsername()); err != nil {
+	if err := model.DelUser(causer.UserID); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
