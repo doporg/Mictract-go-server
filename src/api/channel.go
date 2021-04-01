@@ -69,25 +69,49 @@ func AddChannel(c *gin.Context) {
 
 // Note: All channel
 func GetChannelInfo(c *gin.Context) {
-	ret := []model.Channel{}
+	info := struct {
+		NetworkUrl string `form:"networkUrl"`
+	}{}
 
-	nets, err := model.QueryAllNetwork()
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
+		return
 	}
 
-	for _, net := range nets {
-		if err := net.RefreshChannels(); err != nil {
+	if info.NetworkUrl != "" {
+		net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
 				Result(c.JSON)
+			return
 		}
-		ret = append(ret, net.Channels...)
-	}
+		net.RefreshChannels()
+		response.Ok().
+			SetPayload(response.NewChannels(net.Channels)).
+			Result(c.JSON)
+	} else {
+		ret := []model.Channel{}
+		nets, err := model.QueryAllNetwork()
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+		}
 
-	response.Ok().
-		SetPayload(response.NewChannels(ret)).
-		Result(c.JSON)
+		for _, net := range nets {
+			if err := net.RefreshChannels(); err != nil {
+				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+					SetMessage(err.Error()).
+					Result(c.JSON)
+			}
+			ret = append(ret, net.Channels...)
+		}
+
+		response.Ok().
+			SetPayload(response.NewChannels(ret)).
+			Result(c.JSON)
+	}
 }
