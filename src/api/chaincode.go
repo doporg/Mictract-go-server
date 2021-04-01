@@ -40,11 +40,11 @@ func CreateChaincode(c *gin.Context)  {
 		initRequired	= c.PostForm("initRequired")
 
 		channelName		= c.PostForm("channelName")
-		NetworkURL		= c.PostForm("networkUrl")
+		NetworkURL		= c.PostForm("network")
 	)
 	ccType := "go"
 
-	srcTarGz, err := c.FormFile("code")
+	srcTarGz, err := c.FormFile("file")
 	if err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).

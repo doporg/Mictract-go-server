@@ -10,7 +10,7 @@ type AddNetworkReq struct {
 	Consensus	string `form:"consensus" json:"consensus" binding:"required"`
 	OrdererCount int 	`form:"ordererCount" form:"ordererCount" binding:"required"`
 	PeerCounts	[]int	`form:"peerCounts" json:"peerCounts" binding:"required"`
-	OrgNicknames []string `form:"orgNicknames" json:"orgNicknames" binding:"required"`
+	OrgNicknames []string `form:"organizationNicknames" json:"organizationNicknames" binding:"required"`
 	TlsEnabled	bool	`form:"tlsEnalbed"`
 }
 

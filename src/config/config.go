@@ -24,7 +24,7 @@ var (
 
 	LOCAL_CC_PATH		= filepath.Join(LOCAL_MOUNT_PATH, "chaincodes")
 
-	SDK_LEVEL			= "debug"
+	SDK_LEVEL			= "info"
 
 	DB_SERVER_URL		= "db-server"
 	DB_PW         		= "123456"
