@@ -8,6 +8,8 @@ import (
 )
 
 type Chaincode struct {
+	Nickname	 string `json:"nickname"`
+
 	Status		 string `json:"status"`
 	CCID 		 int 	`json:"ccid"`
 	Label	 	 string	`json:"label"`
@@ -29,6 +31,7 @@ func NewChaincode(cci *model.ChaincodeInstance) Chaincode {
 		global.Logger.Error("fail to get cc ", zap.Error(err))
 	}
 	return Chaincode{
+		Nickname: cc.Nickname,
 		Status: cc.Status,
 		CCID: cc.ID,
 		Label: cci.Label,
