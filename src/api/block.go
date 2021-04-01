@@ -1,29 +1,41 @@
 package api
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"mictract/enum"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
 	"net/http"
+	"regexp"
+	"strconv"
 )
 
 // GET /block
 // Does not support system-channel
 func GetBlockByBlockID(c *gin.Context) {
 	var info request.BlockInfo
-	if err := c.ShouldBindJSON(&info); err != nil {
+	if err := c.ShouldBindQuery(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	fmt.Println(info)
+	var channelID int
+	IdExp := regexp.MustCompile("^(channel)([0-9]+)$")
+	if matches := IdExp.FindStringSubmatch(info.ChannelName); len(matches) < 2 {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage("Error occurred in matching channelID").
+			Result(c.JSON)
+		return
+	} else {
+		channelID, _ = strconv.Atoi(matches[2])
+	}
 
-	ch, err := model.GetChannelFromNets(info.ChannelID, info.NetID)
+	netID := model.NewCaUserFromDomainName(info.NetworkURL).NetworkID
+
+	ch, err := model.GetChannelFromNets(channelID, netID)
 	if err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -31,15 +43,29 @@ func GetBlockByBlockID(c *gin.Context) {
 		return
 	}
 
-	ret, err := ch.GetBlock(info.BlockID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
+	if info.BlockID == -1 {
+		ret, err := ch.GetChannelInfo()
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
 
-	response.Ok().
-		SetPayload(ret).
-		Result(c.JSON)
+		response.Ok().
+			SetPayload(response.NewBlockHeightInfo(ret)).
+			Result(c.JSON)
+	} else {
+		ret, err := ch.GetBlock(uint64(info.BlockID))
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+
+		response.Ok().
+			SetPayload(ret).
+			Result(c.JSON)
+	}
 }
