@@ -20,7 +20,9 @@ func AddPeer(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(info.NetID)
+	orgUser := model.NewCaUserFromDomainName(info.Organization)
+
+	net, err := model.GetNetworkfromNets(orgUser.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -28,15 +30,15 @@ func AddPeer(c *gin.Context) {
 		return
 	}
 
-	if info.OrgID <= 0 || info.OrgID > len(net.Organizations) {
+	if orgUser.OrganizationID <= 0 || orgUser.OrganizationID > len(net.Organizations) {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage(fmt.Sprintf("org%d does not exist", info.OrgID)).
+			SetMessage(fmt.Sprintf("org%d does not exist", orgUser.OrganizationID)).
 			Result(c.JSON)
 		return
 	}
 
-	for i := 0; i < info.Num; i++ {
-		if err := net.Organizations[info.OrgID].AddPeer(); err != nil {
+	for i := 0; i < info.PeerCount; i++ {
+		if err := net.Organizations[orgUser.OrganizationID].AddPeer(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
 				Result(c.JSON)
@@ -47,5 +49,32 @@ func AddPeer(c *gin.Context) {
 	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
 		SetPayload(net).
+		Result(c.JSON)
+}
+
+// GET /api/peer
+func ListPeersByOrganization(c *gin.Context) {
+	info := struct {
+		Organization string `form:"organization" json:"organization"`
+	}{}
+
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	orgUser := model.NewCaUserFromDomainName(info.Organization)
+	org, err := model.GetOrgFromNets(orgUser.OrganizationID, orgUser.NetworkID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewPeers(org.Peers)).
 		Result(c.JSON)
 }

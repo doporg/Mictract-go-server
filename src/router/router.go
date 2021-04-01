@@ -40,11 +40,13 @@ func GetRouter() (router *gin.Engine) {
 	PeerRouter := APIRoute.Group("peer")
 	{
 		PeerRouter.POST("/", api.AddPeer)
+		PeerRouter.GET("/", api.ListPeersByOrganization)
 	}
 
 	OrdererRouter := APIRoute.Group("orderer")
 	{
 		OrdererRouter.POST("/", api.AddOrderer)
+		OrdererRouter.GET("/", api.ListOrderersByNetwork)
 	}
 
 	BlockRouter := APIRoute.Group("block")

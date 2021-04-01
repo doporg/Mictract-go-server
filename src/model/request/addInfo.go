@@ -21,20 +21,14 @@ type AddOrgReq struct {
 }
 
 type AddOrdererReq struct {
-	NetID	int	`form:"netid" binding:"required"`
-	Num     int `form:"num" binding:"required"`
+	NetworkUrl 	 		string 		`form:"networkUrl" json:"networkUrl" binding:"required"`
+	OrdererCount 	 	int 		`form:"ordererCount" json:"peerCount" binding:"required"`
 }
 
 type AddPeerReq struct {
-	NetID	int `form:"netid" binding:"required"`
-	OrgID	int `form:"orgid" binding:"required"`
-	Num 	int `form:"num" binding:"required"`
+	Organization string		`form:"organization" json:"organization" binding:"required"`
+	PeerCount 	 int 		`form:"peerCount" json:"peerCount" binding:"required"`
 }
-
-//type AddChannelReq struct {
-//	NetID 	int 	`form:"netid" binding:"required"`
-//	OrgIDs	[]int	`form:"orgids" binding:"required"`
-//}
 
 type AddChannelReq struct {
 	Nickname        string `form:"nickname" json:"nickname"  binding:"required"`

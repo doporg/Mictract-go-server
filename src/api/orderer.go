@@ -19,7 +19,7 @@ func AddOrderer(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(info.NetID)
+	net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -27,7 +27,7 @@ func AddOrderer(c *gin.Context) {
 		return
 	}
 
-	for i := 0; i < info.Num; i++ {
+	for i := 0; i < info.OrdererCount; i++ {
 		if err := net.AddOrderersToSystemChannel(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
@@ -42,3 +42,28 @@ func AddOrderer(c *gin.Context) {
 		Result(c.JSON)
 }
 
+// GET /api/orderer
+func ListOrderersByNetwork(c *gin.Context) {
+	info := struct {
+		NetworkURL string `form:"networkUrl" json:"networkUrl"`
+	}{}
+
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkURL).NetworkID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewOrderers(net.Orders)).
+		Result(c.JSON)
+}
