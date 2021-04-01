@@ -11,6 +11,9 @@ type User struct {
 	Nickname 		string `json:"nickname"`
 	Organization 	string `json:"organization"`
 	Network			string `json:"network"`
+
+	PrivateKey 		string `json:"privateKey"`
+	Certificate 	string `json:"certificate"`
 }
 
 func NewUser(u model.User) User {
@@ -26,6 +29,8 @@ func NewUser(u model.User) User {
 		Nickname: u.Nickname,
 		Organization: fmt.Sprintf("org%d.net%d.com", user.OrganizationID, user.NetworkID),
 		Network: fmt.Sprintf("net%d.com", user.NetworkID),
+		PrivateKey: user.GetPrivateKey(),
+		Certificate: user.GetCert(),
 	}
 }
 
