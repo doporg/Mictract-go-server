@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"mictract/enum"
@@ -15,97 +14,70 @@ import (
 
 func CreateUser(c *gin.Context) {
 	var info request.CreateUserReq
-	if err := c.ShouldBindJSON(&info); err != nil {
+	var user *model.CaUser
+	var org *model.Organization
+	var mspClient *mspclient.Client
+	var err error
+
+	if err = c.ShouldBindJSON(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	} else if info.Nickname == "system-user" {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("can't use system-user as nickname").
+			Result(c.JSON)
+		return
+	}
+	org, err = model.FindOrganizationByID(info.OrganizationID)
+	if err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	
-
-	netID := model.NewCaUserFromDomainName(info.Network).NetworkID
-	orgUser := model.NewCaUserFromDomainName(info.Organization)
-	if netID != orgUser.NetworkID {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("The organization is not part of the network").
-			Result(c.JSON)
-		return
-	}
-
-	org, err := model.GetOrgFromNets(orgUser.OrganizationID, orgUser.NetworkID)
+	mspClient, err = org.NewMspClient()
 	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
 	// insert into db
-	var newUser *model.User
-	if newUser, err = model.NewUser(
-		orgUser.OrganizationID,
-		orgUser.NetworkID,
-		info.Nickname,
-		info.Role,
-		info.Password,
-		); err != nil {
+	if info.Role == "user" {
+		user, err = model.NewUserCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
+	} else if info.Role == "admin" {
+		user, err = model.NewAdminCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
+	} else {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("only supports user and admin").
+			Result(c.JSON)
+		return
+	}
+	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	newCaUser := model.CaUser{
-		Type: "user",
-		UserID: newUser.ID,
-		OrganizationID: org.ID,
-		NetworkID: org.NetworkID,
-		Password: info.Password,
-	}
-
 	// regiester
-	if err := model.UpdateSDK(org.NetworkID); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	sdk, err := model.GetSDKByNetWorkID(org.NetworkID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	caURL := fmt.Sprintf("ca.org%d.net%d.com", org.ID, org.NetworkID)
-	orgName := fmt.Sprintf("org%d", org.ID)
-	mspClient, err := mspclient.New(
-		sdk.Context(),
-		mspclient.WithCAInstance(caURL),
-		mspclient.WithOrg(orgName))
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	if err := newCaUser.Register(mspClient); err != nil {
+	if err := user.Register(mspClient); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	if err := newCaUser.Enroll(mspClient, true); err != nil {
+	if err := user.Enroll(mspClient, true); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	if err := newCaUser.Enroll(mspClient, false); err != nil {
+	if err := user.Enroll(mspClient, false); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
@@ -113,13 +85,14 @@ func CreateUser(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(response.NewUser(*newUser)).
+		SetPayload(response.NewUser(*user)).
 		Result(c.JSON)
 }
 
 // GET /api/user
+// return all users
 func ListUsers(c *gin.Context) {
-	users, err := model.QueryAllUser()
+	users, err := model.FindAllCaUser()
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -135,23 +108,46 @@ func ListUsers(c *gin.Context) {
 // TODO: revoke user from ca
 func DeleteUser(c *gin.Context) {
 	var info request.DeleteUserReq
+	var user *model.CaUser
+	var org *model.Organization
+	var mspClient *mspclient.Client
+	var err error
+
 	if err := c.ShouldBindJSON(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-
-	causer := model.NewCaUserFromDomainName(info.Username)
+	user, err = model.FindCaUserByID(info.UserID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+	if user.Nickname == "system-user" {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("can't delete user(system-user)").
+			Result(c.JSON)
+		return
+	}
+	if user.Type == "peer" || user.Type == "orderer" {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage("only supports user and admin").
+			Result(c.JSON)
+		return
+	}
+	org, err = model.FindOrganizationByID(user.OrganizationID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
 
 	// revoke
-	if err := model.UpdateSDK(causer.NetworkID); err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	sdk, err := model.GetSDKByNetWorkID(causer.NetworkID)
+	mspClient, err = org.NewMspClient()
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -159,56 +155,14 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	caURL := fmt.Sprintf("ca.org%d.net%d.com", causer.OrganizationID, causer.NetworkID)
-	orgName := fmt.Sprintf("org%d", causer.OrganizationID)
-	mspClient, err := mspclient.New(
-		sdk.Context(),
-		mspclient.WithCAInstance(caURL),
-		mspclient.WithOrg(orgName))
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	if err := causer.Revoke(mspClient); err != nil {
+	if err := user.Revoke(mspClient); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	org, err := model.GetOrgFromNets(causer.OrganizationID, causer.NetworkID)
-	if err != nil {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	if info.Username == org.Users[0] || info.Username == org.Users[1] {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("The user is reserved by the system and cannot be deleted!").
-			Result(c.JSON)
-		return
-	}
-
-	isExist := false
-	for _, user := range org.Users {
-		if user == info.Username {
-			isExist = true
-			continue
-		}
-	}
-	if !isExist {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("user not found").
-			Result(c.JSON)
-		return
-	}
-
-	if err := model.DelUser(causer.UserID); err != nil {
+	if err := model.DeleteCaUserByID(user.ID); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)

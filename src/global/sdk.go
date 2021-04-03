@@ -5,8 +5,7 @@ import (
 )
 
 func initSDKs() {
-	SDKs = make(map[string]*fabsdk.FabricSDK)
-	Nets = make(map[string]interface{})
+	SDKs = make(map[int]*fabsdk.FabricSDK)
 }
 
 func closeSDKs() {

@@ -2,10 +2,13 @@ package model
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"go.uber.org/zap"
-	"io"
 	"io/ioutil"
 	"mictract/config"
+	"mictract/enum"
 	"mictract/global"
 	"os"
 	"path/filepath"
@@ -19,52 +22,112 @@ import (
 )
 
 type CaUser struct {
-	UserID         int
-	OrganizationID int
-	NetworkID      int
-	Type           string
-	Password       string
+	ID         		int
+	Nickname 		string
+	OrganizationID 	int
+	NetworkID      	int
+	Type           	string
+	Password       	string
+	IsInOrdererOrganization  bool
 }
 
-func NewPeerCaUser(peerID, orgID, netID int, password string) *CaUser {
-	return &CaUser{
-		Type:           "peer",
-		UserID:         peerID,
-		OrganizationID: orgID,
-		NetworkID:      netID,
-		Password:       password,
+func (cu *CaUser) insert() error {
+	return global.DB.Create(cu).Error
+}
+
+func checkStatus(orgID, netID int) error {
+	net, _ := FindNetworkByID(netID)
+	if net.Status == enum.StatusError {
+		return errors.New("Failed to call NewCaUser, network status is abnormal")
 	}
+	org, _ := FindOrganizationByID(orgID)
+	if org.Status == enum.StatusError {
+		return errors.New("Failed to call NewCaUser, organization status is abnormal")
+	}
+	return nil
 }
 
-func NewOrdererCaUser(ordererID, netID int, password string) *CaUser {
+func NewPeerCaUser(orgID, netID int, password string) (*CaUser, error) {
+	if err := checkStatus(orgID, netID); err != nil {
+		return &CaUser{}, err
+	}
+
+	cu := &CaUser{
+		Type:           			"peer",
+		OrganizationID: 			orgID,
+		NetworkID:      			netID,
+		Password:       			password,
+		IsInOrdererOrganization: 	false,
+	}
+	if err := cu.insert(); err != nil {
+		return &CaUser{}, err
+	}
+	return cu, nil
+}
+
+func NewOrdererCaUser(orgID, netID int, password string) (*CaUser, error) {
 	// Note: in our rules, orderer belongs to ordererOrganization which is unique in a given network.
 	// So the OrganizationID here should be defined as a negative number.
-	return &CaUser{
-		Type:           "orderer",
-		UserID:         ordererID,
-		OrganizationID: -1,
-		NetworkID:      netID,
-		Password:       password,
+	if err := checkStatus(orgID, netID); err != nil {
+		return &CaUser{}, err
 	}
+
+	cu := &CaUser{
+		Type:           			"orderer",
+		OrganizationID: 			orgID,
+		NetworkID:      			netID,
+		Password:       			password,
+		IsInOrdererOrganization: 	true,
+	}
+	if err := cu.insert(); err != nil {
+		return &CaUser{}, err
+	}
+	return cu, nil
 }
 
-func NewUserCaUser(userID, orgID, netID int, password string) *CaUser {
-	return &CaUser{
-		Type:           "user",
-		UserID:         userID,
-		OrganizationID: orgID,
-		NetworkID:      netID,
-		Password:       password,
+func NewUserCaUser(orgID, netID int, nickname, password string, isInOrdererOrg bool) (*CaUser, error) {
+	if err := checkStatus(orgID, netID); err != nil {
+		return &CaUser{}, err
 	}
+
+	cu := &CaUser{
+		Type:           			"user",
+		OrganizationID: 			orgID,
+		NetworkID:      			netID,
+		Password:       			password,
+		Nickname:					nickname,
+		IsInOrdererOrganization: 	isInOrdererOrg,
+	}
+	if err := cu.insert(); err != nil {
+		return &CaUser{}, err
+	}
+	return cu, nil
 }
 
-func NewAdminCaUser(userID, orgID, netID int, password string) *CaUser {
+func NewAdminCaUser(orgID, netID int, nickname, password string, isInOrdererOrg bool) (*CaUser, error) {
+	if err := checkStatus(orgID, netID); err != nil {
+		return &CaUser{}, err
+	}
+
+	cu := &CaUser{
+		Type:           			"admin",
+		OrganizationID: 			orgID,
+		NetworkID:      			netID,
+		Password:       			password,
+		Nickname: 					nickname,
+		IsInOrdererOrganization: 	isInOrdererOrg,
+	}
+	if err := cu.insert(); err != nil {
+		return &CaUser{}, err
+	}
+	return cu, nil
+}
+
+func NewOrganizationCaUser(orgID, netID int, isInOrdererOrg bool) *CaUser {
 	return &CaUser{
-		Type:           "admin",
-		UserID:         userID,
 		OrganizationID: orgID,
-		NetworkID:      netID,
-		Password:       password,
+		NetworkID: netID,
+		IsInOrdererOrganization: isInOrdererOrg,
 	}
 }
 
@@ -99,33 +162,33 @@ func NewCaUserFromDomainNameWithPassword(domain, password string) *CaUser {
 		cu.Type = "admin"
 		if dotCount <= 2 {
 			// match: admin1.net1.com
-			assignIdByOrder(&cu.UserID, &cu.NetworkID)
+			assignIdByOrder(&cu.ID, &cu.NetworkID)
 			cu.OrganizationID = -1
 		} else {
 			// match: admin1.org1.net1.com
-			assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
+			assignIdByOrder(&cu.ID, &cu.OrganizationID, &cu.NetworkID)
 		}
 
 	case strings.Contains(domain, "user"):
 		cu.Type = "user"
 		if dotCount <= 2 {
 			// match: user1.net1.com
-			assignIdByOrder(&cu.UserID, &cu.NetworkID)
+			assignIdByOrder(&cu.ID, &cu.NetworkID)
 			cu.OrganizationID = -1
 		} else {
 			// match: user1.org1.net1.com
-			assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
+			assignIdByOrder(&cu.ID, &cu.OrganizationID, &cu.NetworkID)
 		}
 
 	case strings.Contains(domain, "peer"):
 		// match: peer1.org1.net1.com
 		cu.Type = "peer"
-		assignIdByOrder(&cu.UserID, &cu.OrganizationID, &cu.NetworkID)
+		assignIdByOrder(&cu.ID, &cu.OrganizationID, &cu.NetworkID)
 
 	case strings.Contains(domain, "orderer"):
 		// match: orderer1.net1.com
 		cu.Type = "orderer"
-		assignIdByOrder(&cu.UserID, &cu.NetworkID)
+		assignIdByOrder(&cu.ID, &cu.NetworkID)
 		cu.OrganizationID = -1
 
 	default:
@@ -144,7 +207,7 @@ func NewCaUserFromDomainNameWithPassword(domain, password string) *CaUser {
 }
 
 func (cu *CaUser) IsInOrdererOrg() bool {
-	return cu.OrganizationID < 0
+	return cu.IsInOrdererOrganization
 }
 
 // jus for peer and orderer
@@ -152,39 +215,39 @@ func (cu *CaUser) GetURL() string {
 	url := ""
 	switch cu.Type {
 	case "user", "admin":
-		url = cu.GetUsername()
+		url = cu.GetName()
 	case "peer":
-		url = fmt.Sprintf("peer%d-org%d-net%d", cu.UserID, cu.OrganizationID, cu.NetworkID)
+		url = fmt.Sprintf("peer%d-org%d-net%d", cu.ID, cu.OrganizationID, cu.NetworkID)
 	case "orderer":
-		url = fmt.Sprintf("orderer%d-net%d", cu.UserID, cu.NetworkID)
+		url = fmt.Sprintf("orderer%d-net%d", cu.ID, cu.NetworkID)
 	}
 	return url
 }
 
-func (cu *CaUser) GetUsername() (username string) {
+func (cu *CaUser) GetName() (username string) {
 	switch cu.Type {
 	case "user":
 		if cu.IsInOrdererOrg() {
-			username = fmt.Sprintf("User%d@net%d.com", cu.UserID, cu.NetworkID)
+			username = fmt.Sprintf("User%d@net%d.com", cu.ID, cu.NetworkID)
 		} else {
-			username = fmt.Sprintf("User%d@org%d.net%d.com", cu.UserID, cu.OrganizationID, cu.NetworkID)
+			username = fmt.Sprintf("User%d@org%d.net%d.com", cu.ID, cu.OrganizationID, cu.NetworkID)
 		}
 	case "admin":
 		if cu.IsInOrdererOrg() {
-			username = fmt.Sprintf("Admin%d@net%d.com", cu.UserID, cu.NetworkID)
+			username = fmt.Sprintf("Admin%d@net%d.com", cu.ID, cu.NetworkID)
 		} else {
-			username = fmt.Sprintf("Admin%d@org%d.net%d.com", cu.UserID, cu.OrganizationID, cu.NetworkID)
+			username = fmt.Sprintf("Admin%d@org%d.net%d.com", cu.ID, cu.OrganizationID, cu.NetworkID)
 		}
 	case "peer":
-		username = fmt.Sprintf("peer%d.org%d.net%d.com", cu.UserID, cu.OrganizationID, cu.NetworkID)
+		username = fmt.Sprintf("peer%d.org%d.net%d.com", cu.ID, cu.OrganizationID, cu.NetworkID)
 	case "orderer":
-		username = fmt.Sprintf("orderer%d.net%d.com", cu.UserID, cu.NetworkID)
+		username = fmt.Sprintf("orderer%d.net%d.com", cu.ID, cu.NetworkID)
 	}
 	return
 }
 
 func (cu *CaUser) GetBasePath() string {
-	username := cu.GetUsername()
+	username := cu.GetName()
 	netName := fmt.Sprintf("net%d", cu.NetworkID)
 
 	basePath := filepath.Join(config.LOCAL_BASE_PATH, netName)
@@ -299,7 +362,7 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte, isTLS bool) error {
 		defer f2.Close()
 		_, _ = f2.Write(cacert)
 
-		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetUsername()+"-cert.pem"))
+		f3, err := os.Create(filepath.Join(prefixPath, "signcerts", cu.GetName()+"-cert.pem"))
 		if err != nil {
 			return err
 		}
@@ -336,116 +399,16 @@ func (cu *CaUser) BuildDir(cacert, cert, privkey []byte, isTLS bool) error {
 	return nil
 }
 
-// copy file
-func copy(src, dst string) (int64, error) {
-	sourceFileStat, err := os.Stat(src)
-	if err != nil {
-		return 0, err
-	}
-
-	if !sourceFileStat.Mode().IsRegular() {
-		return 0, fmt.Errorf("%s is not a regular file", src)
-	}
-
-	source, err := os.Open(src)
-	if err != nil {
-		return 0, err
-	}
-	defer source.Close()
-
-	destination, err := os.Create(dst)
-	if err != nil {
-		return 0, err
-	}
-
-	defer destination.Close()
-	return io.Copy(destination, source)
-}
-
-func (cu *CaUser) GetOrgMspDir() string {
-	netName := fmt.Sprintf("net%d", cu.NetworkID)
-
-	basePath := filepath.Join(config.LOCAL_BASE_PATH, netName)
-
-	if cu.OrganizationID == -1 {
-		// ordererOrganizations
-		basePath = filepath.Join(basePath, "ordererOrganizations", netName + ".com")
-	} else {
-		// peerOrganizations
-		basePath = filepath.Join(basePath, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", cu.OrganizationID, cu.NetworkID))
-	}
-
-	// Build MSP directory by the given CaUser.
-	return filepath.Join(basePath, "msp")
-}
-
-func (cu *CaUser) GenerateOrgMsp() error {
-	basePath := cu.GetOrgMspDir()
-
-
-	//fmt.Println(cu, cu.GetOrgMspDir())
-
-	// cacerts/ca-cert.pem
-	if err := os.MkdirAll(filepath.Join(basePath, "cacerts"), os.ModePerm); err != nil {
-		return err
-	}
-	if _, err := copy(filepath.Join(basePath, "..", "ca", "ca-cert.pem"), filepath.Join(basePath, "cacerts", "ca-cert.pem")); err != nil {
-		return err
-	}
-
-	//fmt.Println(cu, cu.GetOrgMspDir(), basePath, "..", "ca", "ca-cert.pem")
-
-	// tlscacerts/tlsca-cert.pem
-	if err := os.MkdirAll(filepath.Join(basePath, "tlscacerts"), os.ModePerm); err != nil {
-		return err
-	}
-	if _, err := copy(filepath.Join(basePath, "..", "ca", "ca-cert.pem"), filepath.Join(basePath, "tlscacerts", "tlsca-cert.pem")); err != nil {
-		return err
-	}
-
-	// config.yaml
-	f3, err := os.Create(filepath.Join(basePath, "config.yaml"))
-	if err != nil {
-		return err
-	}
-	defer f3.Close()
-	ouconfig := `NodeOUs:
-  Enable: true
-  ClientOUIdentifier:
-    Certificate: cacerts/ca-cert.pem
-    OrganizationalUnitIdentifier: client
-  PeerOUIdentifier:
-    Certificate: cacerts/ca-cert.pem
-    OrganizationalUnitIdentifier: peer
-  AdminOUIdentifier:
-    Certificate: cacerts/ca-cert.pem
-    OrganizationalUnitIdentifier: admin
-  OrdererOUIdentifier:
-    Certificate: cacerts/ca-cert.pem
-    OrganizationalUnitIdentifier: orderer`
-	_, _ = f3.Write([]byte(ouconfig))
-
-	return nil
-}
-
 func (cu *CaUser) GetCACert() string {
-	content, err := ioutil.ReadFile(filepath.Join(cu.GetOrgMspDir(), "cacerts", "ca-cert.pem"))
+	org, err := FindOrganizationByID(cu.OrganizationID)
 	if err != nil {
-		global.Logger.Error("fail to read ca-cert.pem", zap.Error(err))
+		global.Logger.Error("", zap.Error(err))
 	}
-	return string(content)
-}
-
-func GetCACertByOrgIDAndNetID(orgID, netID int) string {
-	cu := CaUser{
-		OrganizationID: orgID,
-		NetworkID: netID,
-	}
-	return cu.GetCACert()
+	return org.GetCACert()
 }
 
 func (cu *CaUser) GetCert() string {
-	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", cu.GetUsername() + "-cert.pem"))
+	content, err := ioutil.ReadFile(filepath.Join(cu.GetBasePath(), "msp", "signcerts", cu.GetName() + "-cert.pem"))
 	if err != nil {
 		global.Logger.Error("fail to read cert.pem", zap.Error(err))
 	}
@@ -482,7 +445,7 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 	// BUG!!!
 
 	request := &msp.RegistrationRequest{
-		Name:   cu.GetUsername(),
+		Name:   cu.GetName(),
 		Type:   cuType,
 		Secret: cu.Password,
 	}
@@ -490,10 +453,8 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 	_, err := mspClient.Register(request)
 	if err != nil {
 		global.Logger.Error("fial to get register ", zap.Error(err))
-		// return errors.WithMessage(err, "fail to register "+cu.GetUsername())
+		// return errors.WithMessage(err, "fail to register "+cu.GetName())
 	}
-
-	UpdateNets(cu)
 
 	return nil
 }
@@ -503,7 +464,7 @@ func (cu *CaUser) Register(mspClient *msp.Client) error {
 // isTLS 是否是用于TLS的证书？
 func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 	var err error
-	username := cu.GetUsername()
+	username := cu.GetName()
 	hosts := []string{cu.GetURL(), "localhost"}
 
 	if isTLS {
@@ -549,13 +510,132 @@ func (cu *CaUser) Enroll(mspClient *msp.Client, isTLS bool) error {
 func (cu *CaUser) Revoke(mspClient *msp.Client) error {
 
 	req := &msp.RevocationRequest{
-		Name: cu.GetUsername(),
+		Name: cu.GetName(),
 		Reason: "Marx bless, no bugs",
 	}
 
 	_, err := mspClient.Revoke(req)
 	if err != nil {
-		return errors.WithMessage(err, "fail to revoke " + cu.GetUsername())
+		return errors.WithMessage(err, "fail to revoke " + cu.GetName())
 	}
 	return nil
+}
+
+
+func (peer *CaUser)JoinChannel(chID int, ordererURL string) error {
+	if peer.Type != "peer" {
+		return errors.New("only support peer")
+	}
+
+	ch, err := FindChannelByID(chID)
+	if err != nil {
+		return err
+	}
+	org, err := FindOrganizationByID(peer.OrganizationID)
+	adminUser, err := org.GetSystemUser()
+	if err != nil {
+		return err
+	}
+
+	rc, err := ch.NewResmgmtClient(adminUser.GetName(), org.GetName())
+	if err != nil {
+		return errors.WithMessage(err, "fail to get rc ")
+	}
+
+	return rc.JoinChannel(
+		ch.GetName(),
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
+		resmgmt.WithOrdererEndpoint(ordererURL),
+		resmgmt.WithTargetEndpoints(peer.GetName()))
+}
+
+func (peer *CaUser)GetJoinedChannel() ([]string, error) {
+	if peer.Type != "peer" {
+		return []string{}, errors.New("only support peer")
+	}
+	sdk, err:= GetSDKByNetworkID(peer.NetworkID)
+	if err != nil {
+		return []string{}, errors.WithMessage(err, "fail to get sdk ")
+	}
+
+	username := fmt.Sprintf("Admin1@org%d.net%d.com", peer.OrganizationID, peer.NetworkID)
+	global.Logger.Info(fmt.Sprintf("Obtaining %s's user certificate", username))
+	rcp := sdk.Context(fabsdk.WithUser(username), fabsdk.WithOrg(fmt.Sprintf("org%d", peer.OrganizationID)))
+	rc, err := resmgmt.New(rcp)
+	if err != nil {
+		return []string{}, errors.WithMessage(err, "fail to get rc ")
+	}
+
+	resps, err := rc.QueryChannels(resmgmt.WithTargetEndpoints(peer.GetName()), resmgmt.WithRetry(retry.DefaultResMgmtOpts))
+	if err != nil {
+		return []string{}, errors.WithMessage(err, "failed to query channel for peer")
+	}
+
+	ret := []string{}
+	for _, resp := range resps.Channels {
+		ret = append(ret, resp.ChannelId)
+	}
+	return ret, nil
+}
+
+func (peer *CaUser)QueryInstalled(orgResMgmt *resmgmt.Client) ([]resmgmt.LifecycleInstalledCC, error) {
+	if peer.Type != "peer" {
+		return []resmgmt.LifecycleInstalledCC{}, errors.New("only support peer")
+	}
+	resps, err := orgResMgmt.LifecycleQueryInstalledCC(
+		resmgmt.WithTargetEndpoints(peer.GetName()),
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts))
+	if err != nil {
+		return []resmgmt.LifecycleInstalledCC{}, errors.WithMessage(err, "fail to query ")
+	}
+
+	for _, resp := range resps {
+		fmt.Println(resp)
+	}
+
+	return resps, nil
+}
+
+
+func FindCaUserInOrganization(orgID, netID int, cuType string) ([]CaUser, error){
+	var cus []CaUser
+	if err := global.DB.
+		Where("network_id = ? and organization_id = ? and type = ?", netID, orgID, cuType).Find(&cus).
+		Error; err != nil {
+			return []CaUser{}, err
+	}
+	return cus, nil
+}
+
+// user and admin
+func FindCaUserInNetwork(netID int) ([]CaUser, error) {
+	var cus []CaUser
+	if err := global.DB.
+		Where("network_id = ? and type in ?", netID, []string{"user", "admin"}).
+		Find(&cus).Error; err != nil {
+		return []CaUser{}, err
+	}
+	return cus, nil
+}
+
+// user and admin
+func FindAllCaUser() ([]CaUser, error) {
+	var cus []CaUser
+	var err error
+	if err = global.DB.Where("type in ?", []string{"user", "admin"}).Find(&cus).Error; err != nil {
+		return []CaUser{}, err
+	}
+	return cus, nil
+}
+
+func FindCaUserByID(id int) (*CaUser, error) {
+	var cus []CaUser
+	if err := global.DB.Where("id = ?", id).Find(&cus).Error; err != nil {
+		return &CaUser{}, err
+	}
+	return &cus[0], nil
+}
+
+func DeleteCaUserByID(caUserID int) error {
+	return  global.DB.Where("id = ?", caUserID).Delete(&CaUser{}).Error
 }

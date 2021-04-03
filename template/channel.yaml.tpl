@@ -67,7 +67,7 @@ Channel: &ChannelDefaults
 
 Profiles:
     NewChannel:
-        Consortium: SampleConsortium
+        Consortium: LLJConsortium
         <<: *ChannelDefaults
         Application:
             <<: *ApplicationDefaults

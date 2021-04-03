@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"mictract/enum"
@@ -16,6 +15,9 @@ import (
 // param: AddChannelReq
 func AddChannel(c *gin.Context) {
 	var info request.AddChannelReq
+	var net *model.Network
+	var err error
+
 	if err := c.ShouldBindJSON(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
@@ -23,20 +25,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	netID := model.NewCaUserFromDomainName(info.NetworkName).NetworkID
-	orgIDs := []int{}
-	for _, orgName := range info.Organizations {
-		orgUser := model.NewCaUserFromDomainName(orgName)
-		if orgUser.NetworkID != netID {
-			response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-				SetMessage(fmt.Sprintf("The %s is not in the %s", orgName, info.NetworkName)).
-				Result(c.JSON)
-			return
-		}
-		orgIDs = append(orgIDs, orgUser.OrganizationID)
-	}
-
-	net, err := model.GetNetworkfromNets(netID)
+	net, err = model.FindNetworkByID(info.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -44,21 +33,15 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	newChID := len(net.Channels) + 1
-
 	go func() {
-		if err := net.AddChannel(orgIDs, info.Nickname); err != nil {
-			n, _ := model.GetNetworkfromNets(netID)
-			if newChID <= len(n.Channels) {
-				n.Channels[newChID - 1].Status = "error"
-			}
-			model.UpdateNets(*n)
+		var ch *model.Channel
+		if ch, err = net.AddChannel(info.OrganizationIDs, info.Nickname); err != nil {
+			ch.UpdateStatus(enum.StatusError)
 			global.Logger.Error("fail to add channel", zap.Error(err))
 			return
 		}
-		n, _ := model.GetNetworkfromNets(netID)
-		n.Channels[newChID - 1].Status = "running"
-		model.UpdateNets(*n)
+		ch.UpdateStatus(enum.StatusRunning)
+		global.Logger.Info("channel has been created successfully", zap.String("channelName", ch.GetName()))
 	}()
 
 	response.Ok().
@@ -70,7 +53,7 @@ func AddChannel(c *gin.Context) {
 // Note: All channel
 func GetChannelInfo(c *gin.Context) {
 	info := struct {
-		NetworkUrl string `form:"networkUrl"`
+		NetworkID int `form:"networkID" json:"networkID"`
 	}{}
 
 	if err := c.ShouldBindQuery(&info); err != nil {
@@ -80,21 +63,28 @@ func GetChannelInfo(c *gin.Context) {
 		return
 	}
 
-	if info.NetworkUrl != "" {
-		net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+	if info.NetworkID != 0 {
+		net, err := model.FindNetworkByID(info.NetworkID)
 		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 				SetMessage(err.Error()).
 				Result(c.JSON)
 			return
 		}
-		net.RefreshChannels()
+		chs, err := net.GetChannels()
+		if err != nil {
+			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+
 		response.Ok().
-			SetPayload(response.NewChannels(net.Channels)).
+			SetPayload(response.NewChannels(chs)).
 			Result(c.JSON)
 	} else {
 		ret := []model.Channel{}
-		nets, err := model.QueryAllNetwork()
+		nets, err := model.FindAllNetworks()
 		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 				SetMessage(err.Error()).
@@ -102,12 +92,13 @@ func GetChannelInfo(c *gin.Context) {
 		}
 
 		for _, net := range nets {
-			if err := net.RefreshChannels(); err != nil {
+			chs, err := net.GetChannels()
+			if err != nil {
 				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 					SetMessage(err.Error()).
 					Result(c.JSON)
 			}
-			ret = append(ret, net.Channels...)
+			ret = append(ret, chs...)
 		}
 
 		response.Ok().

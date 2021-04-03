@@ -15,24 +15,24 @@ type AddNetworkReq struct {
 }
 
 type AddOrgReq struct {
-	NetworkUrl 	string 	`form:"networkUrl" json:"networkUrl" binding:"required"`
+	NetworkID 	int 	`form:"networkID" json:"networkID" binding:"required"`
 	PeerCount 	int 	`form:"peerCount" json:"peerCount" binding:"required"`
 	Nickname   	string 	`form:"nickname" json:"nickname" binding:"required"`
 }
 
 type AddOrdererReq struct {
-	NetworkUrl 	 		string 		`form:"networkUrl" json:"networkUrl" binding:"required"`
+	NetworkID 	 		int 		`form:"networkID" json:"networkID" binding:"required"`
 	OrdererCount 	 	int 		`form:"ordererCount" json:"peerCount" binding:"required"`
 }
 
 type AddPeerReq struct {
-	Organization string		`form:"organization" json:"organization" binding:"required"`
-	PeerCount 	 int 		`form:"peerCount" json:"peerCount" binding:"required"`
+	OrganizationID int		`form:"organizationID" json:"organizationID" binding:"required"`
+	PeerCount 	   int 		`form:"peerCount" json:"peerCount" binding:"required"`
 }
 
 type AddChannelReq struct {
-	Nickname        string `form:"nickname" json:"nickname"  binding:"required"`
-	NetworkName		string `form:"network" json:"network" binding:"required"`
-	Organizations	[]string `form:"organizations" json:"organizations" binding:"required"`
+	Nickname        string 		`form:"nickname" json:"nickname"  binding:"required"`
+	NetworkID		int		 	`form:"networkID" json:"networkID" binding:"required"`
+	OrganizationIDs	[]int	 	`form:"organizationIDs" json:"organizationIDs" binding:"required"`
 }
 

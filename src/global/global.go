@@ -9,18 +9,20 @@ import (
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sync"
 )
 
 var (
 	// global variables go here.
 	DB					*gorm.DB
 	Logger				*zap.Logger
-	SDKs				map[string]*fabsdk.FabricSDK
-	Nets				map[string]interface{}
+	SDKs				map[int]*fabsdk.FabricSDK
 	K8sClientset		*kubernetes.Clientset
 	K8sRestConfig		*rest.Config
 	K8sInformer			cache.SharedIndexInformer
 	K8sLister			v1.PodNamespaceLister
+
+	ChannelLock			sync.Mutex
 )
 
 var (

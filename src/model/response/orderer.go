@@ -6,11 +6,11 @@ type Orderer struct {
 	Name    string `json:"name"`
 }
 
-func NewOrderer(o model.Order) *Orderer {
-	return &Orderer{o.Name}
+func NewOrderer(o model.CaUser) *Orderer {
+	return &Orderer{o.GetName()}
 }
 
-func NewOrderers(os []model.Order) []Orderer {
+func NewOrderers(os []model.CaUser) []Orderer {
 	orderers := []Orderer{}
 	for _, o := range os {
 		orderers = append(orderers, *NewOrderer(o))

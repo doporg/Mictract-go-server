@@ -1,13 +1,14 @@
 package response
 
 import (
-	"fmt"
+	"go.uber.org/zap"
+	"mictract/global"
 	"mictract/model"
 	"strconv"
 )
 
 type Network struct {
-	Name 			string 			`json:"name"`
+	NetworkID 		int 			`json:"networkID"`
 	Nickname 		string 			`json:"nickname"`
 	Consensus 		string 			`json:"consensus"`
 	TlsEnabled 		bool 			`json:"tlsEnabled"`
@@ -16,29 +17,38 @@ type Network struct {
 	Orderers 		[]string 		`json:"orderers"`
 	Organizations 	[]Organization 	`json:"organizations"`
 	Users 			[]User 			`json:"users"`
-	Channels 		[]Channel		 `json:"channels"`
+	Channels 		[]Channel		`json:"channels"`
 }
 
-func NewNetwork(n model.Network) Network {
-	orgs := []Organization{}
-	if len(n.Organizations) >= 2 {
-		orgs = NewOrgs(n.Organizations[1:])
+func NewNetwork(n model.Network) *Network {
+	orderers, err := n.GetOrderers()
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
 	}
-	ret := Network{
-		Name: fmt.Sprintf("net%d.com", n.ID),
+	chs, err := n.GetChannels()
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+	orgs, err := n.GetOrganizations()
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+
+	ret := &Network{
+		NetworkID: n.ID,
 		Nickname: n.Nickname,
 		Consensus: n.Consensus,
 		TlsEnabled: n.TlsEnabled,
 		Status: n.Status,
 		CreateTime: strconv.FormatInt(n.CreatedAt.Unix(), 10),
 		Orderers: []string{},
-		Organizations: orgs,
+		Organizations: NewOrgs(orgs),
 		// TODO
 		Users: []User{},
-		Channels: NewChannels(n.Channels),
+		Channels: NewChannels(chs),
 	}
-	for _, orderer := range n.Orders {
-		ret.Orderers = append(ret.Orderers, orderer.Name)
+	for _, orderer := range orderers {
+		ret.Orderers = append(ret.Orderers, orderer.GetName())
 	}
 	return ret
 }
@@ -46,7 +56,7 @@ func NewNetwork(n model.Network) Network {
 func NewNetworks(ns []model.Network) []Network {
 	ret := []Network{}
 	for _, n := range ns {
-		ret = append(ret, NewNetwork(n))
+		ret = append(ret, *NewNetwork(n))
 	}
 	return ret
 }

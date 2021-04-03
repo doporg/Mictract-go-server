@@ -1,43 +1,39 @@
 package response
 
 import (
-	"fmt"
 	"mictract/model"
 )
 
 type User struct {
-	Name 			string `json:"name"`
-	Role 			string `json:"role"`
-	Nickname 		string `json:"nickname"`
-	Organization 	string `json:"organization"`
-	Network			string `json:"network"`
+	UserID  		int 	`json:"id"`
+	Role 			string 	`json:"role"`
+	Nickname 		string 	`json:"nickname"`
+	OrganizationID 	int 	`json:"organizationID"`
+	NetworkID		int		`json:"networkID"`
 
-	PrivateKey 		string `json:"privateKey"`
-	Certificate 	string `json:"certificate"`
+	PrivateKey 		string 	`json:"privateKey"`
+	Certificate 	string 	`json:"certificate"`
 }
 
-func NewUser(u model.User) User {
-	user := model.CaUser{
+func NewUser(u model.CaUser) *User {
+	return &User{
 		UserID: u.ID,
-		NetworkID: u.NetID,
-		OrganizationID: u.OrgID,
-		Type: u.UserType,
-	}
-	return User{
-		Name: user.GetUsername(),
-		Role: u.UserType,
+		Role: u.Type,
 		Nickname: u.Nickname,
-		Organization: fmt.Sprintf("org%d.net%d.com", user.OrganizationID, user.NetworkID),
-		Network: fmt.Sprintf("net%d.com", user.NetworkID),
-		PrivateKey: user.GetPrivateKey(),
-		Certificate: user.GetCert(),
+		OrganizationID: u.OrganizationID,
+		NetworkID: u.NetworkID,
+		PrivateKey: u.GetPrivateKey(),
+		Certificate: u.GetCert(),
 	}
 }
 
-func NewUsers(us []model.User) []User {
+func NewUsers(us []model.CaUser) []User {
 	usersResp := []User{}
 	for _, u := range us {
-		usersResp = append(usersResp, NewUser(u))
+		if u.Nickname == "system-user" {
+			continue
+		}
+		usersResp = append(usersResp, *NewUser(u))
 	}
 	return usersResp
 }

@@ -6,11 +6,11 @@ type Peer struct {
 	Name  	string `json:"name"`
 }
 
-func NewPeer(p model.Peer) *Peer {
-	return &Peer{p.Name}
+func NewPeer(p model.CaUser) *Peer {
+	return &Peer{p.GetName()}
 }
 
-func NewPeers(ps []model.Peer) []Peer {
+func NewPeers(ps []model.CaUser) []Peer {
 	peers := []Peer{}
 	for _, p := range ps {
 		peers = append(peers, *NewPeer(p))

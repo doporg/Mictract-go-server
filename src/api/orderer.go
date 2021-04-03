@@ -19,7 +19,7 @@ func AddOrderer(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
+	net, err := model.FindNetworkByID(info.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -36,9 +36,7 @@ func AddOrderer(c *gin.Context) {
 		}
 	}
 
-	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
-		SetPayload(net).
 		Result(c.JSON)
 }
 
@@ -55,7 +53,15 @@ func ListOrderersByNetwork(c *gin.Context) {
 		return
 	}
 
-	net, err := model.GetNetworkfromNets(model.NewCaUserFromDomainName(info.NetworkURL).NetworkID)
+	net, err := model.FindNetworkByID(model.NewCaUserFromDomainName(info.NetworkURL).NetworkID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	orderers, err := net.GetOrderers()
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -64,6 +70,6 @@ func ListOrderersByNetwork(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(response.NewOrderers(net.Orders)).
+		SetPayload(response.NewOrderers(orderers)).
 		Result(c.JSON)
 }

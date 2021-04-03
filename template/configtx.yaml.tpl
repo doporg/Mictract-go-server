@@ -2,7 +2,7 @@ Organizations:
     - &OrdererOrg
         Name: ordererorg
         ID: ordererMSP
-        MSPDir: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/msp
+        MSPDir: /mictract/networks/net{{.NetworkID}}/ordererOrganizations/net{{.NetworkID}}.com/msp
         Policies:
             Readers:
                 Type: Signature
@@ -15,29 +15,7 @@ Organizations:
                 Rule: "OR('ordererMSP.admin')"
 
         OrdererEndpoints:
-            - orderer1-net{{.ID}}:7050
-
-    - &Org1
-        Name: org1MSP
-        ID: org1MSP
-        MSPDir: /mictract/networks/net{{.ID}}/peerOrganizations/org1.net{{.ID}}.com/msp
-        Policies:
-            Readers:
-                Type: Signature
-                Rule: "OR('org1MSP.admin', 'org1MSP.peer', 'org1MSP.client')"
-            Writers:
-                Type: Signature
-                Rule: "OR('org1MSP.admin', 'org1MSP.client')"
-            Admins:
-                Type: Signature
-                Rule: "OR('org1MSP.admin')"
-            Endorsement:
-                Type: Signature
-                Rule: "OR('org1MSP.peer')"
-
-        AnchorPeers:
-            - Host: peer1-org1-net{{.ID}}
-              Port: 7051
+            - orderer{{.ID}}-net{{.NetworkID}}:7050
 
 Capabilities:
     Channel: &ChannelCapabilities
@@ -70,15 +48,15 @@ Application: &ApplicationDefaults
         <<: *ApplicationCapabilities
 
 Orderer: &OrdererDefaults
-    OrdererType: {{.Consensus}}
+    OrdererType: etcdraft
     Addresses:
-        - orderer1-net{{.ID}}:7050
+        - orderer{{.ID}}-net{{.NetworkID}}:7050
     EtcdRaft:
         Consenters:
         - Host: orderer1-net{{.ID}}
           Port: 7050
-          ClientTLSCert: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/orderers/orderer1.net{{.ID}}.com/tls/server.crt
-          ServerTLSCert: /mictract/networks/net{{.ID}}/ordererOrganizations/net{{.ID}}.com/orderers/orderer1.net{{.ID}}.com/tls/server.crt
+          ClientTLSCert: /mictract/networks/net{{.NetworkID}}/ordererOrganizations/net{{.NetworkID}}.com/orderers/orderer{{.ID}}.net{{.NetworkID}}.com/tls/server.crt
+          ServerTLSCert: /mictract/networks/net{{.NetworkID}}/ordererOrganizations/net{{.NetworkID}}.com/orderers/orderer{{.ID}}.net{{.NetworkID}}.com/tls/server.crt
     BatchTimeout: 2s
     BatchSize:
         MaxMessageCount: 10
@@ -123,15 +101,5 @@ Profiles:
             Capabilities:
                 <<: *OrdererCapabilities
         Consortiums:
-            SampleConsortium:
+            LLJConsortium:
                 Organizations:
-                    - *Org1
-    DefaultChannel:
-        Consortium: SampleConsortium
-        <<: *ChannelDefaults
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - *Org1
-            Capabilities:
-                <<: *ApplicationCapabilities

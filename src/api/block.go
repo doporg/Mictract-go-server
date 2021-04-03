@@ -7,14 +7,15 @@ import (
 	"mictract/model/request"
 	"mictract/model/response"
 	"net/http"
-	"regexp"
-	"strconv"
 )
 
 // GET /block
 // Does not support system-channel
 func GetBlockByBlockID(c *gin.Context) {
 	var info request.BlockInfo
+	var ch *model.Channel
+	var err error
+
 	if err := c.ShouldBindQuery(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
@@ -22,20 +23,7 @@ func GetBlockByBlockID(c *gin.Context) {
 		return
 	}
 
-	var channelID int
-	IdExp := regexp.MustCompile("^(channel)([0-9]+)$")
-	if matches := IdExp.FindStringSubmatch(info.ChannelName); len(matches) < 2 {
-		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-			SetMessage("Error occurred in matching channelID").
-			Result(c.JSON)
-		return
-	} else {
-		channelID, _ = strconv.Atoi(matches[2])
-	}
-
-	netID := model.NewCaUserFromDomainName(info.NetworkURL).NetworkID
-
-	ch, err := model.GetChannelFromNets(channelID, netID)
+	ch, err = model.FindChannelByID(info.ChannelID)
 	if err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).

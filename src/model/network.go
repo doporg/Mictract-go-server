@@ -2,331 +2,60 @@ package model
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"gorm.io/gorm/clause"
 	mConfig "mictract/config"
+	"mictract/enum"
 	"mictract/global"
 	"mictract/model/kubernetes"
 	"mictract/model/request"
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
-	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
 
-	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"gopkg.in/yaml.v3"
 )
 
 type Network struct {
-	ID        int `json:"id" gorm:"primarykey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	
-	Status string `json:"status"`
+	ID        	int 		`json:"id" gorm:"primarykey"`
+	Nickname	string 		`json:"nickname"`
+	CreatedAt 	time.Time
+	Status 		string 		`json:"status"`
 
-	Name          string        `json:"name" binding:"required"`
-	Nickname	  string 		`json:"nickname"`
-	Orders        Orders        `json:"orders" binding:"required" gorm:"type:text"`
-	Organizations Organizations `json:"organizations" binding:"required" gorm:"type:text"`
-	Channels      Channels      `json:"channels" gorm:"type:text"`
-
-	Consensus  string `json:"consensus" binding:"required"`
-	TlsEnabled bool   `json:"tlsEnabled"`
+	Consensus  	string 		`json:"consensus" binding:"required"`
+	TlsEnabled 	bool   		`json:"tlsEnabled"`
 }
 
-var (
-	// just demo
-	// one orderer one org one peer
-	networks = []Network{
-		{
-			ID: 1,
-			Name: "net1",
-			Orders: []Order{},
-			Channels: []Channel{},
-			Organizations: []Organization{
-				{
-					ID: -1,
-					NetworkID: 1,
-					Name: "ordererorg",
-					Peers: []Peer{},
-					Users: []string{},
-				},
-				{
-					ID: 1,
-					NetworkID: 1,
-					Name: "org1",
-					Peers: []Peer{},
-					Users: []string{},
-				},
-			},
-			Consensus:  "solo",
-			TlsEnabled: true,
-		},
-	}
-)
-
-func FindNetworks(pageInfo request.PageInfo) ([]Network, error) {
-	// TODO
-	// find all networks in the `/networks` directory
-	start := pageInfo.PageSize * (pageInfo.Page - 1)
-	end := pageInfo.PageSize * pageInfo.Page
-	if end > len(global.Nets) {
-		end = len(global.Nets)
-	}
-	networks := []Network{}
-	for _, v := range global.Nets {
-		networks = append(networks, v.(Network))
-	}
-	return networks[start:end], nil
-}
-
-func FindNetworkByID(id int) (*Network, error) {
-	return GetNetworkfromNets(id)
-}
-
-
-
-func DeleteNetworkByID(id int) error {
-	if err := global.DB.Where("id = ?", id).Delete(&Network{}).Error; err != nil {
-		return errors.WithMessage(err, "Unable to delete network")
-	}
-	n, err := GetNetworkfromNets(id)
-	if err != nil {
-		return err
-	}
-	for _, org := range n.Organizations{
-		for i := 1; i < len(org.Users); i++ {
-			if err := DelUser(NewCaUserFromDomainName(org.Users[i]).UserID); err != nil {
-				global.Logger.Error("fail to del user ", zap.Error(err))
-			}
-		}
-	}
-	n.RemoveAllEntity()
-	// n.RemoveAllFile()
-	delete(global.Nets, fmt.Sprintf("net%d", id))
-	sdk, err := GetSDKByNetWorkID(id)
-	if err == nil {
-		sdk.Close()
-	}
-	delete(global.SDKs, fmt.Sprintf("net%d", id))
-	return nil
-}
-
-func QueryAllNetwork() ([]Network, error){
-	nets := []Network{}
-	if err := global.DB.Find(&nets).Error; err != nil {
-		return nil, errors.WithMessage(err, "Fail to query all nets")
-	}
-	return nets, nil
-}
-
-//
-func (n *Network)Insert() error {
-	if err := global.DB.Create(n).Error; err != nil {
-		return errors.WithMessage(err, "Unable to insert network")
-	}
-	return nil
-}
-
-func UpsertAllNets()  {
-	for _, net := range global.Nets {
-		if err := global.DB.Clauses(clause.OnConflict{
-			Columns: []clause.Column{{Name: "id"}},
-		}).Create(net.(Network)).Error; err != nil {
-			global.Logger.Error(fmt.Sprintf("fail to upsert net%d: ",  net.(Network).ID), zap.Error(err))
-		}
-	}
-}
-
-// update to db !!!!
-func (n *Network)Update() error {
-	nets, err := QueryAllNetwork()
-	if err != nil {
-		return errors.WithMessage(err, "No such network found")
+func NewNetwork(nickname, consensus string) (*Network, error) {
+	// 1. check
+	if consensus != "solo" && consensus != "etcdraft" {
+		return &Network{}, errors.New("only supports solo and etcdraft")
 	}
 
-	isExist := false
-	for _, net := range nets {
-		if n.ID == net.ID {
-			isExist = true
-			break
-		}
-	}
-	if !isExist {
-		return errors.New("No such network found")
-	}
-
-	n.UpdatedAt  = time.Now()
-	if err := global.DB.Model(&Network{}).Where("id = ?", n.ID).Updates(n).Error; err != nil {
-		return errors.WithMessage(err, "Fail to update")
-	}
-
-	return nil
-}
-
-// Get Network from Nets
-func GetNetworkfromNets(networkID int) (*Network, error) {
-	n, ok:= global.Nets[fmt.Sprintf("net%d", networkID)]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("The net%d is not deployed, and no records can be queried in Nets", networkID))
-	}
-	net := n.(Network)
-	return &net, nil
-}
-
-// Get basic Network for deploy
-// eg: GetBasicNetWork().Deploy()
-func GetBasicNetwork(consensus string, nickname string) *Network {
-	netID := 0
-	for k, _ := range global.Nets {
-		curID, _ := strconv.Atoi(k[3:])
-		if netID < curID {
-			netID = curID
-		}
-	}
-	netID++
-	return &Network{
-		ID: netID,
-		Name: fmt.Sprintf("net%d", netID),
+	// 2. new
+	net := &Network{
 		Nickname: nickname,
-		Orders: []Order{},
-		Organizations: []Organization{},
-		Channels: []Channel{},
-		Consensus: consensus,
-		TlsEnabled: true,
 		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 		Status: "starting",
+		Consensus: consensus,
 	}
+
+	// 3. insert into db
+	if err := global.DB.Create(net).Error; err != nil {
+		return &Network{}, errors.WithMessage(err, "Unable to insert network")
+	}
+	return net, nil
 }
 
-func (n *Network)InitNetsForThisNet() {
-	global.Nets[fmt.Sprintf("net%d", n.ID)] = *n
-	_, _ = global.Nets[fmt.Sprintf("net%d", n.ID)].(Network)
-}
-
-// Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
-//	and then join the rest of peers and orderers.
-// The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
-func (n *Network) Deploy(org1Nickname string) (err error) {
-	global.Logger.Info("Deploying network...")
-
-	global.Logger.Info("Initialize the network, update the global variable Nets")
-	n.InitNetsForThisNet()
-	n.Insert()
-
-	ordererOrg := GetBasicOrg(-1, n.ID, "ordererorg")
-	org1 := GetBasicOrg(1, n.ID, org1Nickname)
-	channel := Channel{
-		ID: 1,
-		Name: "channel1",
-		Nickname: "sample-channel",
-		NetworkID: n.ID,
-		Organizations: Organizations{
-			//*ordererOrg,
-			*org1,
-		},
-		Orderers: []Order {
-			{fmt.Sprintf("orderer1.net%d.com", n.ID)},
-		},
-		Chaincodes: []ChaincodeInstance{},
-		Status: "starting",
-	}
-
-	// create tools resources
-	//global.Logger.Info("Start the tools node")
-	tools := kubernetes.Tools{}
-	//tools.Create()
-
-	// 启动ca节点并获取基础组织的证书
-	if err := ordererOrg.CreateBasicOrganizationEntity(); err != nil {
-		global.Logger.Error("fail to start ordererOrg", zap.Error(err))
-	}
-	if err := org1.CreateBasicOrganizationEntity(); err != nil {
-		global.Logger.Error("fail to start org1", zap.Error(err))
-	}
-
-	// configtx.yaml should be placed in `networks/netX/configtx.yaml`
-	global.Logger.Info("Render configtx.yaml")
-	if err = n.RenderConfigtx(); err != nil {
-		return err
-	}
-	// generate the genesis block
-	global.Logger.Info("generate the genesis block...")
-	_, _, err = tools.ExecCommand("configtxgen",
-		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
-		"-profile", "Genesis",
-		"-channelID", "system-channel",
-		"-outputBlock", fmt.Sprintf("/mictract/networks/net%d/genesis.block", n.ID),
-	)
-	if err != nil {
-		return err
-	}
-
-	// 启动组织的剩余节点，一个peer或者一个orderer
-	if err := ordererOrg.CreateNodeEntity(); err != nil {
-		global.Logger.Error("fail to start ordererOrg's node", zap.Error(err))
-	}
-	if err := org1.CreateNodeEntity(); err != nil {
-		global.Logger.Error("fail to start org1's node", zap.Error(err))
-	}
-
-
-	// generate a default channel
-	global.Logger.Info("generate a default channel")
-	if _, _, err = tools.ExecCommand("configtxgen",
-		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
-		"-profile", "DefaultChannel",
-		"-channelID", "channel1",
-		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel1.tx", n.ID),
-	); err != nil {
-		return err
-	}
-
-	// Create first Channel channl1
-	if err := channel.CreateChannel(fmt.Sprintf("orderer1.net%d.com", n.ID)); err != nil {
-		return errors.WithMessage(err, "fail to create channel")
-	}
-	ch, _ := GetChannelFromNets(channel.ID, n.ID)
-	ch.Status = "running"
-	UpdateNets(*ch)
-
-	// TODO: join peers into the first channel
-	n, err = GetNetworkfromNets(n.ID)
-	if err != nil {
-		global.Logger.Error("Unable to get the latest network", zap.Error(err))
-	}
-	if err := n.Organizations[1].Peers[0].JoinChannel("channel1", fmt.Sprintf("orderer1.net%d.com", n.ID)); err != nil {
-		return errors.WithMessage(err, "fail to join channel")
-	}
-
-	o, _ := GetOrgFromNets(org1.ID, n.ID)
-	o.Status = "running"
-	UpdateNets(o)
-
-	return nil
-}
-
-func (n *Network) RemoveAllEntity() {
-	for _, org := range n.Organizations {
-		org.RemoveAllEntity()
-	}
-
-	for _, ch := range n.Channels {
-		ch.RemoveAllEntity()
-	}
+func (n *Network) GetName() string {
+	return fmt.Sprintf("net%d", n.ID)
 }
 
 func (n *Network) RemoveAllFile() {
@@ -335,180 +64,200 @@ func (n *Network) RemoveAllFile() {
 	}
 }
 
-func (n *Network) RenderConfigtx() error {
+
+func FindNetworkByID(id int) (*Network, error) {
+	var nets []Network
+	if err := global.DB.Where("id = ?", id).Find(&nets).Error; err != nil {
+		global.Logger.Error(err.Error())
+		return &Network{}, err
+	}
+	if len(nets) == 0 {
+		return &Network{}, errors.New("no such network")
+	}
+	return &nets[0], nil
+}
+
+func DeleteNetworkByID(id int) error {
+	var net *Network
+	var orgs []Organization
+	var ccs []Chaincode
+	var sdk *fabsdk.FabricSDK
+	var err error
+	var ok bool
+
+	net, err = FindNetworkByID(id)
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+
+	// 2 remove organizations entity
+	if err = global.DB.Where("network_id = ?", id).Find(&orgs).Error; err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+	for _, org := range orgs {
+		org.RemoveAllEntity()
+	}
+
+	// 3 remove chaincode entity
+	if ccs, err = net.GetChaincodes(); err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+	for _, cc := range ccs {
+		cc.RemoveEntity()
+	}
+
+	// 4. delete global.SDKs
+	sdk, ok = global.SDKs[id]
+	if ok {
+		sdk.Close()
+		delete(global.SDKs, id)
+	}
+
+	// 5. delete from networks where id = id
+	if err := global.DB.Where("id = ?", id).Delete(&Network{}).Error; err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
+
+	// 6.1 delete from organizations where network_id = id
+	// 6.2 delete from ca_users where network_id = id
+	// 6.3 delete from chaincode where network_id = id
+	// 6.4 delete from channels where network_id = id
+	for _, itf := range []interface{}{
+		&Organization{},
+		&CaUser{},
+		&Chaincode{},
+		&Channel{}} {
+		if err := global.DB.Where("network_id = ?", id).Delete(itf).Error; err != nil {
+			global.Logger.Error("", zap.Error(err))
+		}
+	}
+
+	// 6. TODO: RemoveAllFile
+
+	return nil
+}
+
+func FindAllNetworks() ([]Network, error){
+	nets := []Network{}
+	if err := global.DB.Find(&nets).Error; err != nil {
+		return nil, errors.WithMessage(err, "Fail to query all nets")
+	}
+	return nets, nil
+}
+
+func UpdateNetworkStatusByID(id int, status string) error {
+	return global.DB.Model(&Network{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// Deploy method is just creating a basic network containing only 1 peer and 1 orderer,
+//	and then join the rest of peers and orderers.
+// The basic network is built to make `configtx.yaml` file simple enough to create the genesis block.
+func Deploy(addNetReq request.AddNetworkReq) (*Network, error) {
+	global.Logger.Info("Deploying network...")
+
+	tools := kubernetes.Tools{}
+
+	// 1. insert new network object to db
+	net, err := NewNetwork(addNetReq.Nickname, addNetReq.Consensus)
+	if err != nil {
+		return net, err
+	}
+
+	fmt.Printf("%+v\n", net)
+
+	ordererOrg, err := NewOrdererOrganization(net.ID, "ordererorg")
+	if err != nil {
+		return net, err
+	}
+	// 启动ca节点并获取基础组织的证书
+	if err := ordererOrg.CreateBasicOrganizationEntity(); err != nil {
+		global.Logger.Error("fail to start ordererOrg", zap.Error(err))
+	}
+
+	//org1, err := NewOrganization(net.ID, addNetReq.OrgNicknames[0])
+	//if err != nil {
+	//	return &Network{}, err
+	//}
+	//if err := org1.CreateBasicOrganizationEntity(); err != nil {
+	//	global.Logger.Error("fail to start org1", zap.Error(err))
+	//}
+
+	// configtx.yaml should be placed in `networks/netX/configtx.yaml`
+	global.Logger.Info("Render configtx.yaml")
+	orderers, err := net.GetOrderers()
+	if err != nil {
+		return net, err
+	}
+
+	if err = orderers[0].RenderConfigtx(); err != nil {
+		return net, err
+	}
+
+	// generate the genesis block
+	global.Logger.Info("generate the genesis block...")
+	_, _, err = tools.ExecCommand("configtxgen",
+		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", net.ID),
+		"-profile", "Genesis",
+		"-channelID", "system-channel",
+		"-outputBlock", fmt.Sprintf("/mictract/networks/net%d/genesis.block", net.ID),
+	)
+	if err != nil {
+		return net, err
+	}
+
+	// 启动组织的剩余节点，一个peer或者一个orderer
+	if err := ordererOrg.CreateNodeEntity(); err != nil {
+		global.Logger.Error("fail to start ordererOrg's node", zap.Error(err))
+	}
+	//if err := org1.CreateNodeEntity(); err != nil {
+	//	global.Logger.Error("fail to start org1's node", zap.Error(err))
+	//}
+
+	return net, nil
+}
+
+// only for OrdererOrg
+func (orderer *CaUser) RenderConfigtx() error {
 	templ := template.Must(template.ParseFiles(path.Join(mConfig.LOCAL_MOUNT_PATH, "configtx.yaml.tpl")))
 
-	filename := fmt.Sprintf("/mictract/networks/net%d/configtx.yaml", n.ID)
+	filename := fmt.Sprintf("/mictract/networks/net%d/configtx.yaml", orderer.NetworkID)
 	writer, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer writer.Close()
 
-	if err := templ.Execute(writer, n); err != nil {
+	if err := templ.Execute(writer, orderer); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// update sdk by globals.Nets
-func UpdateSDK(networkID int) error {
-	net := global.Nets[fmt.Sprintf("net%d", networkID)].(Network)
-	sdkconfig, err := yaml.Marshal(NewSDKConfig(&net))
-	if err != nil {
-		return err
-	}
-
-	// global.Logger.Info(string(sdkconfig))
-	// for debug
-	f, _ := os.Create(filepath.Join(mConfig.LOCAL_BASE_PATH, fmt.Sprintf("net%d", networkID), "sdk-config.yaml"))
-	_, _ = f.WriteString(string(sdkconfig))
-	_ = f.Close()
-
-	sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
-	if err != nil {
-		return err
-	}
-	if _, ok := global.SDKs[fmt.Sprintf("net%d", networkID)]; ok {
-		global.SDKs[fmt.Sprintf("net%d", networkID)].Close()
-	}
-	global.SDKs[fmt.Sprintf("net%d", networkID)] = sdk
-	return nil
-}
-
-//
-func (n *Network) GetSDK() (*fabsdk.FabricSDK, error) {
-	if _, ok := global.SDKs[fmt.Sprintf("net%d", n.ID)]; !ok {
-		if err := UpdateSDK(n.ID); err != nil {
-			return nil, err
-		}
-	}
-	return global.SDKs[fmt.Sprintf("net%d", n.ID)], nil
-}
-
-func GetSDKByNetWorkID(id int) (*fabsdk.FabricSDK, error) {
-	global.Logger.Info("current SDK:")
-	for k, _ := range global.SDKs {
-		global.Logger.Info("|" + k)
-	}
-	n := Network{Name: fmt.Sprintf("net%d", id)}
-	global.Logger.Info("get sdk " + n.Name)
-	//return n.GetSDK()
-	sdk, ok := global.SDKs[n.Name]
-	if !ok {
-		return nil, errors.New("please update SDK")
-	}
-	return sdk, nil
-}
-
-func UpdateNets(v interface{}) {
-	global.Logger.Info("UpdateNets ing...")
-	global.Logger.Info("!!!!!!Null pointer exception may occur!!!!!!!")
-	switch non := v.(type) {
-	case Network:
-		global.Nets[fmt.Sprintf("net%d", non.ID)] = non
-		non.Show()
-		if err := non.Update(); err != nil {
-			global.Logger.Error("fail to update net to mysql", zap.Error(err))
-		}
-		//if err := non.UpdateSDK(); err != nil {
-		//	global.Logger.Error("fail to update sdk", zap.Error(err))
-		//}
-	case Organization:
-		org := non
-		n := global.Nets[fmt.Sprintf("net%d", org.NetworkID)].(Network)
-		if org.ID == -1 {
-			if len(n.Organizations) == 0 {
-				n.Organizations = append(n.Organizations, org)
-			} else {
-				n.Organizations[0] = org
-			}
-			// update orderer
-			for _, orderer := range org.Peers {
-				n.Orders = append(n.Orders, Order{
-					orderer.Name,
-				})
-			}
-		} else {
-			if len(n.Organizations) > org.ID {
-				n.Organizations[org.ID] = org
-			} else if len(n.Organizations) == org.ID {
-				n.Organizations = append(n.Organizations, org)
-			} else {
-				panic("The organization ID should be incremented! The ID of the newly added organization must be equal to the largest ID of the existing organization plus one")
-			}
-		}
-
-		UpdateNets(n)
-	case *CaUser:
-		cu := non
-		n := global.Nets[fmt.Sprintf("net%d", cu.NetworkID)].(Network)
-		if cu.Type == "peer" {
-			if cu.UserID - 1 == len(n.Organizations[cu.OrganizationID].Peers){
-				n.Organizations[cu.OrganizationID].Peers = append(n.Organizations[cu.OrganizationID].Peers, Peer{Name: cu.GetUsername()})
-			} else {
-				global.Logger.Info("The peer node already exists")
-			}
-
-			//peers := n.Organizations[cu.OrganizationID].Peers
-			//peers = append(peers, Peer{Name: cu.GetUsername()})
-		} else{
-			if cu.IsInOrdererOrg() {
-				if cu.Type == "admin" || cu.Type == "user"{
-					n.Organizations[0].Users = append(n.Organizations[0].Users, cu.GetUsername())
-				} else {
-					n.Orders = append(n.Orders, Order{Name: cu.GetUsername()})
-					n.Organizations[0].Peers = append(n.Organizations[0].Peers, Peer{Name: cu.GetUsername()})
-				}
-			} else {
-				n.Organizations[cu.OrganizationID].Users = append(n.Organizations[cu.OrganizationID].Users, cu.GetUsername())
-			}
-		}
-		// jump
-		UpdateNets(n)
-	case Channel:
-		c := non
-		n := global.Nets[fmt.Sprintf("net%d", c.NetworkID)].(Network)
-		flag := false
-		for i, channel := range n.Channels {
-			if channel.ID == c.ID {
-				n.Channels[i] = c
-				flag = true
-				break
-			}
-		}
-		if !flag {
-			n.Channels = append(n.Channels, c)
-		}
-		//jump
-		UpdateNets(n)
-	default:
-		global.Logger.Error("UpdateNets only support type(*CaUser, Network, Channel, Organization)")
-	}
 }
 
 func (n *Network)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
-	signs := []msp.SigningIdentity{}
-	// peer admin (n.Orgnaizations include ordererorg
-	for _, org := range n.Organizations {
-		username := fmt.Sprintf("Admin1@org%d.net%d.com", org.ID, n.ID)
-		if org.ID == -1 {
-			username = fmt.Sprintf("Admin1@net%d.com", n.ID)
-		}
-		// password := "admin1pw"
+	orgs, err := n.GetOrganizations()
+	if err != nil {
+		return []msp.SigningIdentity{}, err
+	}
 
+	signs := []msp.SigningIdentity{}
+	for _, org := range orgs {
 		mspClient, err := org.NewMspClient()
 		if err != nil {
 			global.Logger.Error(fmt.Sprintf("fail to get org%d mspClient", org.ID), zap.Error(err))
+		}
+		adminUser, err := org.GetSystemUser()
+		if err != nil {
+			global.Logger.Error("fail to get system-user", zap.Error(err))
 		}
 
 		// 公私钥写入sdk配置文件中，可直接读取，不需要enroll
 		//if err := mspClient.Enroll(username, mspclient.WithSecret(password)); err != nil {
 		//	global.Logger.Error("fail to enroll user " + username, zap.Error(err))
 		//}
-		global.Logger.Info(fmt.Sprintf("Obtaining %s publ and priv", username))
-		sign, err := mspClient.GetSigningIdentity(username)
+		global.Logger.Info(fmt.Sprintf("Obtaining %s publ and priv", adminUser.GetName()))
+
+		sign, err := mspClient.GetSigningIdentity(adminUser.GetName())
 		if err != nil {
 			global.Logger.Error(fmt.Sprintf("fail to get org%d AdminSigningIdentity", org.ID), zap.Error(err))
 		}
@@ -518,30 +267,24 @@ func (n *Network)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
 	return signs, nil
 }
 
-
-func (n *Network)Show() {
-	out, err := json.Marshal(n)
-	if err != nil {
-		global.Logger.Error("fail to show network", zap.Error(err))
-	}
-	fmt.Println(string(out))
-}
-
 // AddOrderers
-// eg: GetSystemChannel(n.ID).AddOrderers()
 func (net *Network)AddOrderersToSystemChannel() error {
 	global.Logger.Info("Add Orderer to system-channel ...")
 
-	n, err := GetNetworkfromNets(net.ID)
-	if err != nil {
-		return err
-	}
-
-	if n.Consensus == "solo" {
+	if net.Consensus == "solo" {
 		return errors.New("Does not support networks that use the solo protocol")
 	}
 
-	c, err := GetSystemChannel(n.ID)
+	c := GetSystemChannel(net.ID)
+	orderers, err := c.GetOrderers()
+	if err != nil {
+		return err
+	}
+	ordOrg, err := net.GetOrdererOrganization()
+	if err != nil {
+		return err
+	}
+	adminUser, err := ordOrg.GetSystemUser()
 	if err != nil {
 		return err
 	}
@@ -552,27 +295,16 @@ func (net *Network)AddOrderersToSystemChannel() error {
 		return err
 	}
 
-	newOrdererID := len(n.Orders) + 1
-	//newOrderer := Order{
-	//	Name: fmt.Sprintf("orderer%d.net%d.com", newOrdererID, n.ID),
-	//}
-	//n.Orders = append(n.Orders, newOrderer)
-	//UpdateNets(*n)
-
-
-	UpdateSDK(n.ID)
-	sdk, err := GetSDKByNetWorkID(n.ID)
-	if err != nil {
-		return err
-	}
-
-	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca.net%d.com", n.ID)), mspclient.WithOrg("ordererorg"))
+	mspClient, err := ordOrg.NewMspClient()
 	if err != nil {
 		return err
 	}
 	// regiester new orderer
 	global.Logger.Info("Regiester new orderer")
-	user := NewOrdererCaUser(newOrdererID, n.ID, fmt.Sprintf("orderer%dpw", newOrdererID))
+	user, err := NewOrdererCaUser(ordOrg.ID, net.ID, "orderer1")
+	if err != nil {
+		return err
+	}
 	if err := user.Register(mspClient); err != nil {
 		return err
 	}
@@ -587,19 +319,17 @@ func (net *Network)AddOrderersToSystemChannel() error {
 	}
 
 	global.Logger.Info("orderer starts creating")
-	if err := kubernetes.NewOrderer(n.ID, newOrdererID).AwaitableCreate(); err != nil {
+	if err := kubernetes.NewOrderer(net.ID, user.ID).AwaitableCreate(); err != nil {
 		return err
 	}
 	global.Logger.Info("orderer has been created synchronously")
 
-	n, _ = GetNetworkfromNets(n.ID)
 	// generate ord1.json
 	st := `[`
-	for _, orderer := range n.Orders {
-		user := NewCaUserFromDomainName(orderer.Name)
-		tlscert := user.GetTLSCert(true)
+	for _, orderer := range orderers {
+		tlscert := orderer.GetTLSCert(true)
 		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) +
-			`","host":"` + user.GetURL() +
+			`","host":"` + orderer.GetURL() +
 			`","port":7050,` +
 			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) + `"},`
 	}
@@ -616,8 +346,8 @@ func (net *Network)AddOrderersToSystemChannel() error {
 
 	// generate ord2.json
 	st = `[`
-	for _, orderer := range n.Orders {
-		st += `"` + orderer.Name + `",`
+	for _, orderer := range orderers {
+		st += `"` + orderer.GetURL() + `",`
 	}
 	st = st[:len(st) - 1]
 	st += "]"
@@ -631,10 +361,6 @@ func (net *Network)AddOrderersToSystemChannel() error {
 	f2.Close()
 
 	// call addorg.sh to generate org_update_in_envelope.pb
-	// TODO
-	//cmd := exec.Command(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"), "addOrderers", c.Name)
-	//output, err := cmd.CombinedOutput()
-	//global.Logger.Info(string(output))
 	tools := kubernetes.Tools{}
 	_, _, err = tools.ExecCommand(
 		filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
@@ -647,7 +373,7 @@ func (net *Network)AddOrderersToSystemChannel() error {
 
 	// sign for org_update_in_envelope.pb and update it
 	signs := []msp.SigningIdentity{}
-	adminIdentity, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@net%d.com", n.ID))
+	adminIdentity, err := mspClient.GetSigningIdentity(adminUser.GetName())
 	if err != nil {
 		return errors.WithMessage(err, "ordererAdmin fail to sign")
 	}
@@ -661,8 +387,8 @@ func (net *Network)AddOrderersToSystemChannel() error {
 	}
 	defer envelopeFile.Close()
 
-	resmgmtClient, err := resmgmt.New(
-		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", c.NetworkID)), fabsdk.WithOrg("ordererorg")))
+
+	resmgmtClient, err := c.NewResmgmtClient(adminUser.GetName(), ordOrg.GetName())
 	if err != nil {
 		return err
 	}
@@ -675,7 +401,7 @@ func (net *Network)AddOrderersToSystemChannel() error {
 	_, err = resmgmtClient.SaveChannel(
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
-		resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", c.NetworkID)))
+		resmgmt.WithOrdererEndpoint(orderers[0].GetName()))
 	if err != nil {
 		return errors.WithMessage(err, "fail to update channel config")
 	}
@@ -684,20 +410,26 @@ func (net *Network)AddOrderersToSystemChannel() error {
 
 func (n *Network) AddOrgToConsortium(orgID int) error {
 	global.Logger.Info(fmt.Sprintf("Add org%d to Consortium(Write to system-channel)...", orgID))
-	net, err := GetNetworkfromNets(n.ID)
+
+	orderers, err := n.GetOrderers()
 	if err != nil {
 		return err
 	}
-	org, err := GetOrgFromNets(orgID, net.ID)
+	org, err := FindOrganizationByID(orgID)
 	if err != nil {
+		return err
+	}
+	ordOrg, err := n.GetOrdererOrganization()
+	if err != nil {
+		return err
+	}
+	ordAdminUser, err := ordOrg.GetSystemUser()
+	if err!= nil {
 		return err
 	}
 
 	global.Logger.Info("Obtaining channel config...")
-	sysch, err := GetSystemChannel(net.ID)
-	if err != nil {
-		return err
-	}
+	sysch := GetSystemChannel(n.ID)
 	if err :=sysch.getAndStoreConfig(); err != nil {
 		return err
 	}
@@ -718,26 +450,19 @@ func (n *Network) AddOrgToConsortium(orgID int) error {
 		filepath.Join(mConfig.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
 		"addOrgToConsortium",
 		"system-channel",
-		org.MSPID)
+		org.GetMSPID())
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}
 
 
-	global.Logger.Info("sign for org_update_in_envelope.pb")
-	UpdateSDK(n.ID)
-	sdk, err := GetSDKByNetWorkID(n.ID)
-	if err != nil {
-		return err
-	}
-
-	mspClient, err := mspclient.New(sdk.Context(), mspclient.WithCAInstance(fmt.Sprintf("ca.net%d.com", n.ID)), mspclient.WithOrg("ordererorg"))
+	mspClient, err := ordOrg.NewMspClient()
 	if err != nil {
 		return err
 	}
 
 	signs := []msp.SigningIdentity{}
-	adminIdentity, err := mspClient.GetSigningIdentity(fmt.Sprintf("Admin1@net%d.com", n.ID))
+	adminIdentity, err := mspClient.GetSigningIdentity(ordAdminUser.GetName())
 	if err != nil {
 		return errors.WithMessage(err, "ordererAdmin fail to sign")
 	}
@@ -750,8 +475,7 @@ func (n *Network) AddOrgToConsortium(orgID int) error {
 	}
 	defer envelopeFile.Close()
 
-	resmgmtClient, err := resmgmt.New(
-		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", net.ID)), fabsdk.WithOrg("ordererorg")))
+	resmgmtClient, err := GetSystemChannel(n.ID).NewResmgmtClient(ordAdminUser.GetName(), ordOrg.GetName())
 	if err != nil {
 		return err
 	}
@@ -764,7 +488,7 @@ func (n *Network) AddOrgToConsortium(orgID int) error {
 	_, err = resmgmtClient.SaveChannel(
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
-		resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", net.ID)))
+		resmgmt.WithOrdererEndpoint(orderers[0].GetName()))
 	if err != nil {
 		return errors.WithMessage(err, "fail to update channel config")
 	}
@@ -773,140 +497,143 @@ func (n *Network) AddOrgToConsortium(orgID int) error {
 }
 
 // AddOrg creates an organizational entity
-func (n *Network) AddOrg(nickname string) error {
-	net, err := GetNetworkfromNets(n.ID)
+func (n *Network) AddOrg(nickname string) (*Organization, error) {
+	org, err := NewOrganization(n.ID, nickname)
 	if err != nil {
-		return err
+		return &Organization{}, err
 	}
-	org := GetBasicOrg(len(net.Organizations), net.ID, nickname)
 	if err := org.CreateBasicOrganizationEntity(); err != nil {
-		return err
+		org.UpdateStatus(enum.StatusError)
+		return &Organization{}, err
 	}
 	if err := org.CreateNodeEntity(); err != nil {
-		return err
+		org.UpdateStatus(enum.StatusError)
+		return &Organization{}, err
 	}
-	if err := net.AddOrgToConsortium(org.ID); err != nil {
-		return err
+	if err := n.AddOrgToConsortium(org.ID); err != nil {
+		org.UpdateStatus(enum.StatusError)
+		return &Organization{}, err
 	}
 
-	o, _ := GetOrgFromNets(org.ID, net.ID)
-	o.Status = "running"
-	UpdateNets(o)
-
-	return nil
+	return org, nil
 }
 
-func (n *Network) AddChannel(orgIDs []int, nickname string) error {
-	channel := Channel{
-		ID: len(n.Channels) + 1,
-		Name: fmt.Sprintf("channel%d", len(n.Channels) + 1),
-		Nickname: nickname,
-		NetworkID: n.ID,
-		Organizations: []Organization{},
-		Orderers: []Order{n.Orders[0]},
-		Chaincodes: []ChaincodeInstance{},
-		Status: "starting",
+func (n *Network) AddChannel(orgIDs []int, nickname string) (*Channel, error) {
+	ch, err := NewChannel(n.ID, nickname, orgIDs)
+	if err != nil {
+		return ch, err
+	}
+	orgs, err := ch.GetOrganizations()
+	if err != nil {
+		return ch, err
+	}
+	orderers, err := ch.GetOrderers()
+	if err != nil {
+		return ch, err
 	}
 
-	orgNum := len(n.Organizations) - 1
-	for _, id := range orgIDs {
-		if id < 1 || id > orgNum {
-			return errors.New(fmt.Sprintf("org%d does not exist in the network", id))
-		}
-	}
-	channel.Organizations = append(channel.Organizations, n.Organizations[orgIDs[0]])
-
-
-	if err := channel.RenderConfigtx(); err != nil {
-		return errors.WithMessage(err, "fail to render configtx.yaml")
+	if err := ch.RenderConfigtx(); err != nil {
+		return ch, errors.WithMessage(err, "fail to render configtx.yaml")
 	}
 
 	tools := kubernetes.Tools{}
 	global.Logger.Info("generate a default channel")
-	_, _, err := tools.ExecCommand("configtxgen",
+	_, _, err = tools.ExecCommand("configtxgen",
 		"-configPath", fmt.Sprintf("/mictract/networks/net%d/", n.ID),
 		"-profile", "NewChannel",
-		"-channelID", fmt.Sprintf("channel%d", channel.ID),
-		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel%d.tx", n.ID, channel.ID),
+		"-channelID", ch.GetName(),
+		"-outputCreateChannelTx", fmt.Sprintf("/mictract/networks/net%d/channel%d.tx", n.ID, ch.ID),
 	)
 	if err != nil {
-		return err
+		return ch, err
 	}
 
-	if err := channel.CreateChannel(n.Orders[0].Name); err != nil {
-		return err
+	if err := ch.CreateChannel(orderers[0].GetName()); err != nil {
+		return ch, err
 	}
 
-	for _, peer := range channel.Organizations[0].Peers {
-		if err := peer.JoinChannel(fmt.Sprintf("channel%d", channel.ID), channel.Orderers[0].Name); err != nil {
-			return err
+	global.Logger.Info("First peer join channel...")
+	peers, err := orgs[0].GetPeers()
+	global.Logger.Info(fmt.Sprintf("%+v\n", peers))
+	for _, peer := range peers {
+		if err := peer.JoinChannel(ch.ID, orderers[0].GetName()); err != nil {
+			global.Logger.Error("", zap.Error(err))
 		}
 	}
 
 	for i := 1; i < len(orgIDs); i++ {
-		global.Logger.Info(fmt.Sprintf("add org%d to channel%d", orgIDs[i], channel.ID))
-		if err := channel.AddOrg(orgIDs[i]); err != nil {
-			return err
+		global.Logger.Info(fmt.Sprintf("add org%d to channel%d", orgIDs[i], ch.ID))
+		if err := ch.AddOrg(orgIDs[i]); err != nil {
+			return ch, err
 		}
 	}
 	// bug: orderer处理更新配置文件需要时间, 加入通道操作在orderer还每处理完通道配置更新交易就提交上去，
 	//      会导致身份识别错误。注意这个玄学问题
 	time.Sleep(5 * time.Second)
 
-	c, err := GetChannelFromNets(channel.ID, channel.NetworkID)
-	if err != nil {
-		global.Logger.Error("fail to get channel ", zap.Error(err))
-	}
-	for i := 1; i < len(channel.Organizations); i++ {
-		org := channel.Organizations[i]
-		for _, peer := range org.Peers {
-			if err := peer.JoinChannel(fmt.Sprintf("channel%d", c.ID), c.Orderers[0].Name); err != nil {
-				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.Name, c.ID), zap.Error(err))
-				return err
+	global.Logger.Info("Rest peer join channel...")
+	for i := 1; i < len(orgs); i++ {
+		org := orgs[i]
+		peers, err := org.GetPeers()
+		if err != nil {
+			global.Logger.Error("", zap.Error(err))
+			continue
+		}
+		for _, peer := range peers {
+			if err := peer.JoinChannel(
+				ch.ID,
+				orderers[0].GetName()); err != nil {
+				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.GetName(), ch.ID), zap.Error(err))
 			}
 		}
 	}
 
-	return nil
+	return ch, nil
 }
 
-func (n *Network)RefreshChannels() error {
-	global.Logger.Info(fmt.Sprintf("Refresh channels in net%d", n.ID))
-	for _, ch := range n.Channels {
-		global.Logger.Info(fmt.Sprintf("update channel%d...", ch.ID))
-		newCh, err := GetChannelFromNets(ch.ID, ch.NetworkID)
-		if err != nil {
-			return errors.WithMessage(err, "fail to refresh channels")
-		}
-		UpdateNets(*newCh)
+func (n *Network) GetOrganizations() ([]Organization, error) {
+	orgs := []Organization{}
+	if err := global.DB.Where("network_id = ? and is_orderer_org = ?", n.ID, false).Find(&orgs).Error; err != nil {
+		return []Organization{}, err
 	}
-	return nil
+	return orgs, nil
 }
 
-
-// 给network中的自定义字段使用
-// scan for scanner helper
-func scan(data interface{}, value interface{}) error {
-	if value == nil {
-		return nil
+func (n *Network) GetOrdererOrganization() (*Organization, error) {
+	orgs := []Organization{}
+	if err := global.DB.Where("network_id = ? and is_orderer_org = ?", n.ID, true).Find(&orgs).Error; err != nil {
+		return &Organization{}, err
 	}
-
-	switch value.(type) {
-	case []byte:
-		return json.Unmarshal(value.([]byte), data)
-	case string:
-		return json.Unmarshal([]byte(value.(string)), data)
-	default:
-		return fmt.Errorf("val type is valid, is %+v", value)
-	}
+	return &orgs[0], nil
 }
 
-// for valuer helper
-func value(data interface{}) (interface{}, error) {
-	vi := reflect.ValueOf(data)
-	// 判断是否为 0 值
-	if vi.IsZero() {
-		return nil, nil
+func (n *Network) GetOrderers() ([]CaUser, error) {
+	cus := []CaUser{}
+	if err := global.DB.Where("network_id = ? and type = ?", n.ID, "orderer").Find(&cus).Error; err != nil {
+		return []CaUser{}, err
 	}
-	return json.Marshal(data)
+	if len(cus) == 0 {
+		return []CaUser{}, errors.New("no orderer in network")
+	}
+	return cus, nil
+}
+
+func (n *Network) GetChannels() ([]Channel, error) {
+	chs := []Channel{}
+	if err := global.DB.Where("network_id = ?", n.ID).Find(&chs).Error; err != nil {
+		return []Channel{}, err
+	}
+	return chs, nil
+}
+
+func (n *Network) GetChaincodes() ([]Chaincode, error) {
+	ccs := []Chaincode{}
+	if err := global.DB.Where("network_id = ?", n.ID).Find(&ccs).Error; err != nil {
+		return []Chaincode{}, err
+	}
+	return ccs, nil
+}
+
+func (n *Network) UpdateStatus(status string) error {
+	return global.DB.Model(&Network{}).Where("id = ?", n.ID).Update("status", status).Error
 }

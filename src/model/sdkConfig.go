@@ -2,8 +2,14 @@ package model
 
 import (
 	"fmt"
-	"mictract/config"
+	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
+	"gopkg.in/yaml.v3"
+	mConfig "mictract/config"
+	"mictract/global"
+	"os"
 	"path/filepath"
+
+	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
 )
 
 type SDKConfig struct {
@@ -73,17 +79,24 @@ type SDKCAs struct {
 	} `yaml:"registrar"`
 }
 
-func NewSDKConfig(n *Network) *SDKConfig {
+func NewSDKConfig(netID int) *SDKConfig {
+	n, _ := FindNetworkByID(netID)
+	orgs, _ := n.GetOrganizations()
+	ordOrg, _ := n.GetOrdererOrganization()
+	orgs = append(orgs, *ordOrg)
+	orderers, _ := n.GetOrderers()
+	chs, _ := n.GetChannels()
+
 	sdkconfig := SDKConfig{
 		Version: "1.0.0",
 		Client: &SDKConfigClient{
-			Organization: "org1",
+			Organization: orgs[0].GetName(),
 			Logging: struct {
 				Level string "yaml:\"level\""
-			}{Level: config.SDK_LEVEL},
+			}{Level: mConfig.SDK_LEVEL},
 			Cryptoconfig: struct {
 				Path string "yaml:\"path\""
-			}{Path: filepath.Join(config.LOCAL_BASE_PATH, n.Name)},
+			}{Path: filepath.Join(mConfig.LOCAL_BASE_PATH, n.GetName())},
 		},
 		Organizations:          map[string]*SDKConfigOrganizations{},
 		Orderers:               map[string]*SDKConfigNode{},
@@ -91,17 +104,18 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		Channels:               map[string]*SDKConfigChannel{},
 		CertificateAuthorities: map[string]*SDKCAs{},
 	}
+
+
+
 	// organizations
-	for _, org := range n.Organizations {
-		orgName := fmt.Sprintf("org%d", org.ID)
-		orgMSP := orgName + "MSP"
-		if org.ID == -1 {
-			orgName = "ordererorg"
-			orgMSP = "ordererMSP"
-		}
-		sdkconfig.Organizations[orgName] = &SDKConfigOrganizations{
-			Mspid:                  orgMSP,
-			CryptoPath: filepath.Join(config.LOCAL_BASE_PATH, n.Name, "peerOrganizations", fmt.Sprintf("org%d.net%d.com", org.ID, n.ID),
+	for _, org := range orgs {
+		sdkconfig.Organizations[org.GetName()] = &SDKConfigOrganizations{
+			Mspid:                  org.GetMSPID(),
+			CryptoPath: filepath.Join(
+				mConfig.LOCAL_BASE_PATH,
+				n.GetName(),
+				"peerOrganizations",
+				fmt.Sprintf("org%d.net%d.com", org.ID, n.ID),
 				"users", "{username}", "msp"),
 			// CryptoPath:             "peerOrganizations/" + org.Name + "." + n.Name + ".com/users/{username}/msp",
 			Peers:                  []string{},
@@ -109,26 +123,26 @@ func NewSDKConfig(n *Network) *SDKConfig {
 			CertificateAuthorities: []string{},
 		}
 
-		for _, peer := range org.Peers {
-			sdkconfig.Organizations[org.Name].Peers = append(sdkconfig.Organizations[org.Name].Peers, peer.Name)
+		peers, _ := org.GetPeers()
+
+		for _, peer := range peers {
+			sdkconfig.Organizations[org.GetName()].Peers =
+				append(sdkconfig.Organizations[org.GetName()].Peers, peer.GetName())
 		}
 
-		if org.ID != -1 {
-			sdkconfig.Organizations[org.Name].CertificateAuthorities = append(sdkconfig.Organizations[org.Name].CertificateAuthorities, "ca."+org.Name+"."+n.Name+".com")
-		} else {
-			sdkconfig.Organizations[org.Name].CertificateAuthorities = append(sdkconfig.Organizations[org.Name].CertificateAuthorities, "ca."+n.Name+".com")
-		}
-
+		sdkconfig.Organizations[org.GetName()].CertificateAuthorities =
+			append(sdkconfig.Organizations[org.GetName()].CertificateAuthorities, org.GetCAID())
 
 		// users
-		for _, user := range org.Users {
-			causer := NewCaUserFromDomainName(user)
-			sdkconfig.Organizations[org.Name].Users[user] = &SDKConfigOrganizationsUsers{
+		users, _ := org.GetUsers()
+
+		for _, user := range users {
+			sdkconfig.Organizations[org.GetName()].Users[user.GetName()] = &SDKConfigOrganizationsUsers{
 				Key: SDKConfigPem{
-					Pem: causer.GetPrivateKey(),
+					Pem: user.GetPrivateKey(),
 				},
 				Cert: SDKConfigPem{
-					Pem: causer.GetCert(),
+					Pem: user.GetCert(),
 				},
 			}
 		}
@@ -157,13 +171,13 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	}
 	*/
 	// orderers
-	for _, orderer := range n.Orders {
-		sdkconfig.Orderers[orderer.Name] = &SDKConfigNode{
-			URL: orderer.getURL(),
+	for _, orderer := range orderers {
+		sdkconfig.Orderers[orderer.GetName()] = &SDKConfigNode{
+			URL: fmt.Sprintf("grpcs://%s:7050", orderer.GetURL()),
 			TLSCACerts: struct {
 				Pem string "yaml:\"pem\""
 			}{
-				Pem: NewCaUserFromDomainName(orderer.Name).GetCACert(),
+				Pem: orderer.GetCACert(),
 			},
 		}
 	}
@@ -188,21 +202,22 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	}
 
 	// peers
-	for _, org := range n.Organizations {
-		if org.ID == -1 {
+	for _, org := range orgs {
+		if org.IsOrdererOrganization() {
 			continue
 		}
-		for _, peer := range org.Peers {
-			sdkconfig.Peers[peer.Name] = &SDKConfigNode{
-				URL: peer.GetURL(),
+		peers, _ := org.GetPeers()
+		for _, peer := range peers {
+			sdkconfig.Peers[peer.GetName()] = &SDKConfigNode{
+				URL: fmt.Sprintf("grpcs://%s:7051", peer.GetURL()),
 				TLSCACerts: struct {
 					Pem string "yaml:\"pem\""
 				}{
-					Pem: NewCaUserFromDomainName(peer.Name).GetCACert(),
+					Pem: peer.GetCACert(),
 				},
 			}
 			//channels _default
-			sdkconfig.Channels["_default"].Peers[peer.Name] = struct {
+			sdkconfig.Channels["_default"].Peers[peer.GetName()] = struct {
 				EndorsingPeer  bool "yaml:\"endorsingPeer\""
 				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
 				LedgerQuery    bool "yaml:\"ledgerQuery\""
@@ -214,7 +229,7 @@ func NewSDKConfig(n *Network) *SDKConfig {
 				EventSource:    true,
 			}
 			//channels system-channel
-			sdkconfig.Channels["system-channel"].Peers[peer.Name] = struct {
+			sdkconfig.Channels["system-channel"].Peers[peer.GetName()] = struct {
 				EndorsingPeer  bool "yaml:\"endorsingPeer\""
 				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
 				LedgerQuery    bool "yaml:\"ledgerQuery\""
@@ -232,9 +247,8 @@ func NewSDKConfig(n *Network) *SDKConfig {
 
 
 	// channels else
-	for _, channel := range n.Channels {
-		channel.Name = fmt.Sprintf("channel%d", channel.ID)
-		sdkconfig.Channels[channel.Name] = &SDKConfigChannel{
+	for _, ch := range chs {
+		sdkconfig.Channels[ch.GetName()] = &SDKConfigChannel{
 			Peers: map[string]struct {
 				EndorsingPeer  bool "yaml:\"endorsingPeer\""
 				ChaincodeQuery bool "yaml:\"chaincodeQuery\""
@@ -242,9 +256,12 @@ func NewSDKConfig(n *Network) *SDKConfig {
 				EventSource    bool "yaml:\"eventSource\""
 			}{},
 		}
-		for _, org := range channel.Organizations {
-			for _, peer := range org.Peers {
-				sdkconfig.Channels[channel.Name].Peers[peer.Name] = struct {
+		orgs, _ := ch.GetOrganizations()
+
+		for _, org := range orgs {
+			peers, _ := org.GetPeers()
+			for _, peer := range peers {
+				sdkconfig.Channels[ch.GetName()].Peers[peer.GetName()] = struct {
 					EndorsingPeer  bool "yaml:\"endorsingPeer\""
 					ChaincodeQuery bool "yaml:\"chaincodeQuery\""
 					LedgerQuery    bool "yaml:\"ledgerQuery\""
@@ -261,18 +278,12 @@ func NewSDKConfig(n *Network) *SDKConfig {
 	}
 
 	// certificateAuthorities
-	for _, org := range n.Organizations {
-		url := fmt.Sprintf("https://ca-org%d-net%d:7054", org.ID, org.NetworkID)
-		caName := fmt.Sprintf("ca.org%d.net%d.com", org.ID, org.NetworkID)
-		if org.ID == -1 {
-			url = fmt.Sprintf("https://ca-net%d:7054", org.NetworkID)
-			caName = fmt.Sprintf("ca.net%d.com", org.NetworkID)
-		}
-		sdkconfig.CertificateAuthorities[caName] = &SDKCAs{
-			URL: url,
+	for _, org := range orgs {
+		sdkconfig.CertificateAuthorities[org.GetCAID()] = &SDKCAs{
+			URL: org.GetCAURLInK8S(),
 			TLSCACerts: struct {
 				Pem []string "yaml:\"pem\""
-			}{Pem: []string{GetCACertByOrgIDAndNetID(org.ID, org.NetworkID)}},
+			}{Pem: []string{org.GetCACert()}},
 			Registrar: struct {
 				EnrollId     string "yaml:\"enrollId\""
 				EnrollSecret string "yaml:\"enrollSecret\""
@@ -283,4 +294,34 @@ func NewSDKConfig(n *Network) *SDKConfig {
 		}
 	}
 	return &sdkconfig
+}
+
+func GetSDKByNetworkID(id int) (*fabsdk.FabricSDK, error) {
+	configObj := NewSDKConfig(id)
+
+	sdkconfig, err := yaml.Marshal(configObj)
+	if err != nil {
+		return &fabsdk.FabricSDK{}, err
+	}
+
+	// global.Logger.Info(string(sdkconfig))
+	// for debug
+	f, _ := os.Create(filepath.Join(mConfig.LOCAL_BASE_PATH, fmt.Sprintf("net%d", id), "sdk-config.yaml"))
+	_, _ = f.WriteString(string(sdkconfig))
+	_ = f.Close()
+
+	sdk, err := fabsdk.New(config.FromRaw(sdkconfig, "yaml"))
+	if err != nil {
+		return &fabsdk.FabricSDK{}, err
+	}
+	updateSDKByNetworkID(id, sdk)
+	return sdk, nil
+}
+
+func updateSDKByNetworkID(id int, sdk *fabsdk.FabricSDK) {
+	oldSDK, ok := global.SDKs[id]
+	if ok {
+		oldSDK.Close()
+	}
+	global.SDKs[id] = sdk
 }

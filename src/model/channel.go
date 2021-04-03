@@ -3,10 +3,13 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/hyperledger/fabric-protos-go/common"
+	channelclient "github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
 	"go.uber.org/zap"
+	"mictract/enum"
 	"mictract/model/kubernetes"
 	"path"
 	"text/template"
@@ -26,190 +29,218 @@ import (
 )
 
 type Channel struct {
-	ID            int 					`json:"id"`
-	Name          string        		`json:"name"`
-	Nickname	  string 				`json:"nickname"`
-	NetworkID     int        			`json:"networkID"`
-	Organizations Organizations 		`json:"organizations"`
-	Orderers      Orders        		`json:"orderers"`
+	ID            		int 				`json:"id"`
+	Nickname	  		string 				`json:"nickname"`
+	NetworkID     		int        			`json:"networkID"`
+	Status 		  		string 				`json:"status"`
 
-	// update it when commitCC success
-	Chaincodes     []ChaincodeInstance	`json:"chaincodes"`
-
-	Status 		  string 				`json:"status"`
+	OrganizationIDs		ints 				`json:"organization_ids"`
+	OrdererIDs          ints				`json:"orderer_ids"`
 }
 
-type Channels []Channel
-
-// 自定义数据字段所需实现的两个接口
-func (channels *Channels) Scan(value interface{}) error {
-	return scan(&channels, value)
+// gorm need
+type ints []int
+func (arr ints) Value() (driver.Value, error) {
+	return json.Marshal(arr)
+}
+func (arr *ints) Scan(data interface{}) error {
+	return json.Unmarshal(data.([]byte), &arr)
 }
 
-func (channels Channels) Value() (driver.Value, error) {
-	return value(channels)
-}
+func NewChannel(netID int, nickname string, orgIDs []int) (*Channel, error) {
+	// 1. check
+	net, _ := FindNetworkByID(netID)
+	if net.Status != enum.StatusRunning {
+		return &Channel{}, errors.New("Failed to call NewChannel, network status is abnormal")
+	}
 
-func (channel *Channel) Scan(value interface{}) error {
-	return scan(&channel, value)
-}
+	if len(orgIDs) == 0 {
+		return &Channel{}, errors.New("Failed to call NewChannel, orgIDs length is at least 1")
+	}
 
-func (channel Channel) Value() (driver.Value, error) {
-	return value(channel)
-}
-
-// 防止传进来的channel对象不完整，比如更新组织对象时没有无法更新到channel对象，
-// 所以从Nets中重新构造一个channel，保证信息最新
-func GetChannelFromNets(channelID int, netID int) (*Channel, error) {
-	net, err := GetNetworkfromNets(netID)
+	orderers, err := net.GetOrderers()
 	if err != nil {
-		return nil, err
+		return &Channel{}, err
 	}
 
-	if channelID == -1 {
-		return nil, errors.New("Does not support system-channel, please call GetSystemChannel")
+	ch := &Channel{
+		Nickname: nickname,
+		NetworkID: netID,
+		Status: enum.StatusStarting,
+		OrganizationIDs: orgIDs,
+		OrdererIDs: []int{orderers[0].ID},
 	}
-	if len(net.Channels) < channelID || channelID < -1 || channelID == 0{
-		return nil, errors.New("The channel does not exist in the network")
+	if err := global.DB.Create(ch).Error; err != nil {
+		return &Channel{}, err
 	}
+	return ch, nil
+}
 
-
-	ret := net.Channels[channelID - 1]
-	for i, org := range net.Channels[channelID - 1].Organizations {
-		ret.Organizations[i] = net.Organizations[org.ID]
+func GetSystemChannel(netID int) *Channel {
+	return &Channel{
+		ID: -1,
+		NetworkID: netID,
+		Status: enum.StatusRunning,
 	}
-	return &ret, nil
 }
 
 func (c *Channel) NewLedgerClient(username, orgname string) (*ledger.Client, error) {
-	//sdk, ok := global.SDKs[c.NetworkName]
-	if err := UpdateSDK(c.NetworkID); err != nil {
-		return nil, err
-	}
-	sdk, err := GetSDKByNetWorkID(c.NetworkID)
+	sdk, err := GetSDKByNetworkID(c.NetworkID)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to get sdk ")
+		return &ledger.Client{}, errors.WithMessage(err, "fail to get sdk ")
 	}
-	ledgerClient, err := ledger.New(sdk.ChannelContext(fmt.Sprintf("channel%d", c.ID), fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
+
+	ledgerClient, err := ledger.New(sdk.ChannelContext(c.GetName(), fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
 	if err != nil {
-		return nil, err
+		return &ledger.Client{}, err
 	}
 	return ledgerClient, nil
 }
 
 func (c *Channel) NewResmgmtClient(username, orgname string) (*resmgmt.Client, error) {
-	if err := UpdateSDK(c.NetworkID); err != nil {
-		return nil, err
-	}
-	sdk, err := GetSDKByNetWorkID(c.NetworkID)
+	sdk, err := GetSDKByNetworkID(c.NetworkID)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to get sdk ")
+		return &resmgmt.Client{}, errors.WithMessage(err, "fail to get sdk ")
 	}
 	resmgmtClient, err := resmgmt.New(sdk.Context(fabsdk.WithUser(username), fabsdk.WithOrg(orgname)))
 	if err != nil {
-		return nil, err
+		return &resmgmt.Client{}, err
 	}
 	return resmgmtClient, nil
 }
 
-func GetSystemChannel(netID int) (*Channel, error) {
-	net, err := GetNetworkfromNets(netID)
+func (c *Channel) NewChannelClient(username, orgname string) (*channelclient.Client, error) {
+	sdk, err := GetSDKByNetworkID(c.NetworkID)
 	if err != nil {
-		return nil, err
+		return &channelclient.Client{}, errors.WithMessage(err, "fail to get sdk ")
 	}
-	return &Channel{
-		ID: -1,
-		Name: "system-channel",
-		Nickname: "fuckNickname",
-		NetworkID: netID,
-		Organizations: []Organization{net.Organizations[0]},
-		Orderers: net.Orders,
-	}, nil
+	ccp := sdk.ChannelContext(
+		c.GetName(),
+		fabsdk.WithUser(username),
+		fabsdk.WithOrg(orgname))
+	chClient, err := channelclient.New(ccp)
+	if err != nil {
+		return &channelclient.Client{}, err
+	}
+	return chClient, nil
+}
+
+func (c *Channel) GetName() string {
+	if c.ID == -1 {
+		return "system-channel"
+	}
+	return fmt.Sprintf("channel%d", c.ID)
+}
+
+func (c *Channel) GetOrderers() ([]CaUser, error) {
+	if len(c.OrdererIDs) <= 0 {
+		return []CaUser{}, errors.New("no orderer in channel")
+	}
+	cus := []CaUser{}
+	for _, ordererID := range c.OrdererIDs {
+		ord, err := FindCaUserByID(ordererID)
+		if err != nil {
+			return []CaUser{}, err
+		}
+		cus = append(cus, *ord)
+	}
+	return cus, nil
+}
+
+func (c *Channel) GetOrganizations() ([]Organization, error) {
+	if len(c.OrganizationIDs) <= 0 {
+		return []Organization{}, errors.New("no organization in channel")
+	}
+	orgs := []Organization{}
+	for _, orgID := range c.OrganizationIDs {
+		org, err := FindOrganizationByID(orgID)
+		if err != nil {
+			return []Organization{}, err
+		}
+		orgs = append(orgs, *org)
+	}
+	return orgs, nil
 }
 
 func (c *Channel)CreateChannel(ordererURL string) error {
 	global.Logger.Info("channel is creating...")
 
-	global.Logger.Info("Update the global variable Nets and insert the new channel into it")
-	UpdateNets(*c)
+	channelConfigTxPath := filepath.Join(
+		config.LOCAL_BASE_PATH,
+		fmt.Sprintf("net%d", c.NetworkID),
+		fmt.Sprintf("channel%d.tx", c.ID))
 
-	UpdateSDK(c.NetworkID)
-
-	sdk, err := GetSDKByNetWorkID(c.NetworkID)
-	if err != nil {
-		return errors.WithMessage(err, "fail to get sdk ")
-	}
-	channelConfigTxPath := filepath.Join(config.LOCAL_BASE_PATH, fmt.Sprintf("net%d", c.NetworkID), fmt.Sprintf("channel%d.tx", c.ID))
-
-	n, err := GetNetworkfromNets(c.NetworkID)
+	n, err := FindNetworkByID(c.NetworkID)
 	if err != nil {
 		return err
 	}
 
+	// 1. get signs
 	global.Logger.Info("Obtaining administrator signature...")
 	adminIdentitys, err := n.GetAllAdminSigningIdentities()
 	if err != nil {
 		return errors.WithMessage(err, "fail to get all SigningIdentities")
 	}
 
-
+	// 2. generate req
 	req := resmgmt.SaveChannelRequest{
-		ChannelID: fmt.Sprintf("channel%d", c.ID),
+		ChannelID: c.GetName(),
 		ChannelConfigPath: channelConfigTxPath,
 		SigningIdentities: adminIdentitys,
 	}
 
-	rcp := sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@org%d.net%d.com", c.Organizations[0].ID, n.ID)), fabsdk.WithOrg(fmt.Sprintf("org%d", c.Organizations[0].ID)))
-	rc, err := resmgmt.New(rcp)
+	// 3. get rc
+	org, err := FindOrganizationByID(c.OrganizationIDs[0])
+	if err != nil {
+		return err
+	}
+
+	adminUser, err := org.GetSystemUser()
+	if err != nil {
+		return err
+	}
+
+	rc, err := c.NewResmgmtClient(adminUser.GetName(), org.GetName())
 	if err != nil {
 		return errors.WithMessage(err, "fail to get rc ")
 	}
 
+	// 4. submitting
 	global.Logger.Info("Submitting to create channel transaction...")
 	_, err = rc.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
-
 
 	return err
 }
 
-//func (c *Channel) GetBlockByID()
+
 func GetSysChannelConfig(netID int) ([]byte, error) {
-	if err := UpdateSDK(netID); err != nil {
-		return nil, err
-	}
-	sdk, err := GetSDKByNetWorkID(netID)
+	net, err := FindNetworkByID(netID)
 	if err != nil {
-		return nil, errors.WithMessage(err, "fail to get sdk ")
+		return []byte{}, err
+	}
+	orderers, err := net.GetOrderers()
+	if err != nil {
+		return []byte{}, err
+	}
+	ordOrg, err := net.GetOrdererOrganization()
+	if err != nil {
+		return []byte{}, err
+	}
+	ordAdminOrg, err := ordOrg.GetSystemUser()
+	if err != nil {
+		return []byte{}, err
+	}
+	resmgmtClient, err := GetSystemChannel(netID).NewResmgmtClient(ordAdminOrg.GetName(), ordOrg.GetName())
+	if err != nil {
+		return []byte{}, err
 	}
 
-	resmgmtClient, err := resmgmt.New(
-		sdk.Context(fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)), fabsdk.WithOrg("ordererorg")))
+	cfg, err := resmgmtClient.QueryConfigBlockFromOrderer(
+		"system-channel",
+		resmgmt.WithOrdererEndpoint(orderers[0].GetName()))
 	if err != nil {
-		return nil, err
+		return []byte{}, errors.WithMessage(err, "fail to query system-channel config")
 	}
-
-	cfg, err := resmgmtClient.QueryConfigBlockFromOrderer("system-channel", resmgmt.WithOrdererEndpoint(fmt.Sprintf("orderer1.net%d.com", netID)))
-	if err != nil {
-		return nil, errors.WithMessage(err, "fail to query system-channel config")
-	}
-	//global.Logger.Info("Obtaining ledgerClient ...")
-	//
-	//ledgerClient, err := ledger.New(sdk.ChannelContext(
-	//	"system-channel",
-	//	fabsdk.WithUser(fmt.Sprintf("Admin1@net%d.com", netID)),
-	//	fabsdk.WithOrg("ordererorg")))
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//global.Logger.Info("Query ...")
-	//// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	//peername := fmt.Sprintf("peer1.org1.net%d.com", netID)
-	////orderername := fmt.Sprintf("orderer1.net%d.com", netID)
-	//cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(peername))
-	//if err != nil {
-	//	return nil, errors.WithMessage(err, "fail to query config")
-	//}
 
 	return proto.Marshal(cfg)
 }
@@ -218,69 +249,106 @@ func (c *Channel) GetChannelConfig() ([]byte, error) {
 	if c.ID == -1 {
 		return nil, errors.New("please call GetSysChannelConfig")
 	}
-	fmt.Println(c.Organizations[0].Users[0], c.Organizations[0].ID)
-	ledgerClient, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+
+	orgs, err := c.GetOrganizations()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	adminUser, err := orgs[0].GetSystemUser()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	ledgerClient, err := c.NewLedgerClient(adminUser.GetName(), orgs[0].GetName())
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to get ledgerClient")
 	}
 
-	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
+	peers, err := orgs[0].GetPeers()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	cfg, err := ledgerClient.QueryConfigBlock(ledger.WithTargetEndpoints(peers[0].GetName()))
 	if err != nil {
 		return nil, errors.WithMessage(err, "fail to query config")
 	}
-
-	//fmt.Println(cfg.Header)
-	//fmt.Println(cfg.Data)
-	//fmt.Println(cfg.Metadata)
 
 	return proto.Marshal(cfg)
 }
 
 // Don't use for system-channel
 func (c *Channel) GetChannelInfo() (*fab.BlockchainInfoResponse, error) {
-	if len(c.Organizations) < 1 {
+	var err error
+	var org *Organization
+	if len(c.OrganizationIDs) < 1 {
 		return &fab.BlockchainInfoResponse{}, errors.New("No organization in the channel")
 	}
-	if len(c.Organizations[0].Peers) < 1 {
-		return &fab.BlockchainInfoResponse{}, errors.New("No peer in the organization")
-	}
-	if (len(c.Organizations[0].Users) < 1) {
-		return &fab.BlockchainInfoResponse{}, errors.New("No user in the organization")
-	}
 
-	lc, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
-	if err != nil {
-		return &fab.BlockchainInfoResponse{}, err
-	}
+	for _, orgID := range c.OrganizationIDs {
+		org, err = FindOrganizationByID(orgID)
+		if err != nil {
+			global.Logger.Error("", zap.Error(err))
+			continue
+		}
+		adminUser, err := org.GetSystemUser()
+		if err != nil {
+			global.Logger.Error("", zap.Error(err))
+			continue
+		}
+		lc, err := c.NewLedgerClient(adminUser.GetName(), org.GetName())
+		if err != nil {
+			global.Logger.Error("", zap.Error(err))
+			continue
+		}
 
-	return lc.QueryInfo(ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
+		peers, err := org.GetPeers()
+		if err != nil {
+			global.Logger.Error("", zap.Error(err))
+			continue
+		}
+
+		for _, peer := range peers {
+			var ret *fab.BlockchainInfoResponse
+			ret, err = lc.QueryInfo(ledger.WithTargetEndpoints(peer.GetName()))
+			if err != nil {
+				global.Logger.Error("", zap.Error(err))
+			}
+			// !!!出口
+			return ret, nil
+		}
+	}
+	return &fab.BlockchainInfoResponse{}, err
 }
 
 // Don't use for system-channel
 func (c *Channel) GetBlock(blockID uint64) (*common.Block, error) {
-	if len(c.Organizations) < 1 {
-		return &common.Block{}, errors.New("No organization in the channel")
+	org, err := FindOrganizationByID(c.OrganizationIDs[0])
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+		return &common.Block{}, err
 	}
-	if len(c.Organizations[0].Peers) < 1 {
-		return &common.Block{}, errors.New("No peer in the organization")
+	adminUser, err := org.GetSystemUser()
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+		return &common.Block{}, err
 	}
-	if (len(c.Organizations[0].Users) < 1) {
-		return &common.Block{}, errors.New("No user in the organization")
-	}
-
-	lc, err := c.NewLedgerClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+	lc, err := c.NewLedgerClient(adminUser.GetName(), org.GetName())
 	if err != nil {
 		return &common.Block{}, err
 	}
 
-	return lc.QueryBlock(blockID, ledger.WithTargetEndpoints(c.Organizations[0].Peers[0].Name))
+	peers, err := org.GetPeers()
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+		return &common.Block{}, err
+	}
+	return lc.QueryBlock(blockID, ledger.WithTargetEndpoints(peers[0].GetName()))
 }
 
 func (c *Channel)getAndStoreConfig() error {
 	global.Logger.Info("Obtaining channel configuration ...")
-	if c.ID != -1 && (len(c.Organizations) < 1 || len(c.Orderers) < 1) {
-		return errors.New("There is no organization in the channel.")
-	}
 
 	bt := []byte{}
 	var err error
@@ -295,7 +363,6 @@ func (c *Channel)getAndStoreConfig() error {
 			return err
 		}
 	}
-
 
 	global.Logger.Info("Storing channel configuration ...")
 	f, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "config_block.pb"))
@@ -317,16 +384,34 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 	}
 	defer envelopeFile.Close()
 
+	orgs, err := c.GetOrganizations()
+	if err != nil {
+		return err
+	}
+
+	adminUser, err := orgs[0].GetSystemUser()
+	if err != nil {
+		return err
+	}
+
+	orderers, err := c.GetOrderers()
+	if err != nil {
+		return err
+	}
+
 	req := resmgmt.SaveChannelRequest{
 		ChannelID:         fmt.Sprintf("channel%d", c.ID),
 		ChannelConfig:     envelopeFile,
 		SigningIdentities: signs,
 	}
-	resmgmtClient, err := c.NewResmgmtClient(c.Organizations[0].Users[0], fmt.Sprintf("org%d", c.Organizations[0].ID))
+	resmgmtClient, err := c.NewResmgmtClient(adminUser.GetName(), orgs[0].GetName())
+	if err != nil {
+		return err
+	}
 	_, err = resmgmtClient.SaveChannel(
 		req,
 		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
-		resmgmt.WithOrdererEndpoint(c.Orderers[0].Name))
+		resmgmt.WithOrdererEndpoint(orderers[0].GetName()))
 	if err != nil {
 		return errors.WithMessage(err, "fail to update channel config")
 	}
@@ -336,17 +421,15 @@ func (c *Channel)updateConfig(signs []msp.SigningIdentity) error {
 // AddOrg uses the existing organization's certificate to update the configuration of the channel
 func (c *Channel) AddOrg(orgID int) error {
 	global.Logger.Info(fmt.Sprintf("Add org%d to channel%d", orgID, c.ID))
-	org := GetBasicOrg(orgID, c.NetworkID, "temp")
+	org, err := FindOrganizationByID(orgID)
+	if err != nil {
+		return err
+	}
 
 	global.Logger.Info("Obtaining channel config...")
 	if err := c.getAndStoreConfig(); err != nil {
 		return err
 	}
-
-	//// 启动ca，获取各种证书
-	//if err := org.CreateBasicOrganizationEntity(); err != nil {
-	//	return err
-	//}
 
 	// generate configtx.yaml
 	global.Logger.Info("generate configtx.yaml...")
@@ -370,8 +453,8 @@ func (c *Channel) AddOrg(orgID int) error {
 	_, _, err = tools.ExecCommand(
 		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
 		"addOrg",
-		fmt.Sprintf("channel%d", c.ID),
-		org.MSPID,)
+		c.GetName(),
+		org.GetMSPID(),)
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}
@@ -379,15 +462,13 @@ func (c *Channel) AddOrg(orgID int) error {
 	// sign for org_update_in_envelope.pb and update it
 	global.Logger.Info("sign for org_update_in_envelope.pb")
 	signs := []msp.SigningIdentity{}
-	for _, org := range c.Organizations {
-		//mspClient, err := org.NewMspClient()
-		//if err != nil {
-		//	return errors.WithMessage(err, "fail to get mspClient "+org.Name)
-		//}
-		//adminIdentity, err := mspClient.GetSigningIdentity("Admin")
-		//if err != nil {
-		//	return errors.WithMessage(err, org.Name+"fail to sign")
-		//}
+
+	orgs, err := c.GetOrganizations()
+	if err != nil {
+		return err
+	}
+
+	for _, org := range orgs {
 		global.Logger.Info(fmt.Sprintf("Obtaining org%d's adminIdentity", org.ID))
 		adminIdentity, err := org.GetAdminSigningIdentity()
 		if err != nil {
@@ -396,21 +477,13 @@ func (c *Channel) AddOrg(orgID int) error {
 		signs = append(signs, adminIdentity)
 	}
 
-
 	// update org_update_in_envelope.pb
 	global.Logger.Info("Update channel config...")
 	if err := c.updateConfig(signs); err != nil {
 		return err
 	}
 
-	// update channel to Nets
-	global.Logger.Info("Update Nets...")
-	c.Organizations = append(c.Organizations, *org)
-	UpdateNets(*c)
-
-	// TODO
-	// return org.CreateNodeEntity()
-	return nil
+	return UpdateOrgIDs(c.ID, orgID)
 }
 
 func (c *Channel)UpdateAnchors(orgID int) error {
@@ -420,17 +493,9 @@ func (c *Channel)UpdateAnchors(orgID int) error {
 		return errors.New(fmt.Sprintf("org ID is incorrect. ID: %d", orgID))
 	}
 
-	org := Organization{}
-	flag := false
-	for _, o := range c.Organizations {
-		if orgID == o.ID {
-			org = o
-			flag = true
-			break
-		}
-	}
-	if !flag {
-		return errors.New(fmt.Sprintf("The org%d could not be found in channel%d", orgID, c.ID))
+	org, err := FindOrganizationByID(orgID)
+	if err != nil {
+		return err
 	}
 
 	// generate config_block.pb
@@ -439,9 +504,14 @@ func (c *Channel)UpdateAnchors(orgID int) error {
 	}
 
 	// generate anchors.json
+	peers, err := org.GetPeers()
+	if err != nil {
+		return err
+	}
+
 	st := `{"mod_policy":"Admins","value":{"anchor_peers":[`
-	for _, peer := range org.Peers {
-		st += `{"host":"` + NewCaUserFromDomainName(peer.Name).GetURL() + `","port":7051},`
+	for _, peer := range peers {
+		st += `{"host":"` + peer.GetURL() + `","port":7051},`
 	}
 	st += `{"host":"` + "lilingj.github.io" + `","port":7051},`
 	// jq这个坑货，多一个逗号就解析不出来
@@ -465,23 +535,20 @@ func (c *Channel)UpdateAnchors(orgID int) error {
 	_, _, err = tools.ExecCommand(
 		filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "addorg.sh"),
 		"updateAnchors",
-		fmt.Sprintf("channel%d", c.ID),
-		org.MSPID)
+		c.GetName(),
+		org.GetMSPID())
 	if err != nil {
 		return errors.WithMessage(err, "fail to exec addorg.sh")
 	}
 
 	// sign for org_update_in_envelope.pb and update it
+	orgs, err := c.GetOrganizations()
+	if err != nil {
+		return err
+	}
+
 	signs := []msp.SigningIdentity{}
-	for _, org := range c.Organizations {
-		//mspClient, err := org.NewMspClient()
-		//if err != nil {
-		//	return errors.WithMessage(err, "fail to get mspClient "+org.Name)
-		//}
-		//adminIdentity, err := mspClient.GetSigningIdentity("Admin")
-		//if err != nil {
-		//	return errors.WithMessage(err, org.Name+"fail to sign")
-		//}
+	for _, org := range orgs {
 		global.Logger.Info(fmt.Sprintf("Obtaining org%d's adminIdentity", org.ID))
 		adminIdentity, err := org.GetAdminSigningIdentity()
 		if err != nil {
@@ -492,12 +559,11 @@ func (c *Channel)UpdateAnchors(orgID int) error {
 
 	// update org_update_in_envelope.pb
 	return c.updateConfig(signs)
-
 }
 
 // AddOrderers
 // eg: GetSystemChannel(n.ID).AddOrderers(Order{fmt.Sprintf("orderer%d.net%d.com", len(n.Orderers) + 1, n.ID)})
-func (c *Channel)AddOrderers(orderer Order) error {
+func (c *Channel)AddOrderers(orderer CaUser) error {
 	global.Logger.Info("Add Orderers ...")
 	if c.ID != -1 {
 		return errors.New("only for system-channel")
@@ -508,14 +574,17 @@ func (c *Channel)AddOrderers(orderer Order) error {
 		return err
 	}
 
-
-
 	// generate ord1.json
+	orderers, err := c.GetOrderers()
+	if err != nil {
+		return err
+	}
+
 	st := `["`
-	for _, orderer := range c.Organizations[0].Peers {
-		tlscert := NewCaUserFromDomainName(orderer.Name).GetTLSCert(true)
+	for _, orderer := range orderers {
+		tlscert := NewCaUserFromDomainName(orderer.GetURL()).GetTLSCert(true)
 		st += `{"client_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) +
-			`","host":"` + orderer.Name +
+			`","host":"` + orderer.GetURL() +
 			`","port":7050,` +
 			`"server_tls_cert":"` + base64.StdEncoding.EncodeToString([]byte(tlscert)) + `"},`
 	}
@@ -531,8 +600,8 @@ func (c *Channel)AddOrderers(orderer Order) error {
 
 	// generate ord2.json
 	st = `[`
-	for _, orderer := range c.Organizations[0].Peers {
-		st += `"` + orderer.Name + `",`
+	for _, orderer := range orderers {
+		st += `"` + orderer.GetURL() + `",`
 	}
 	st += "]"
 	f2, err := os.Create(filepath.Join(config.LOCAL_SCRIPTS_PATH, "addorg", "ord2.json"))
@@ -560,14 +629,19 @@ func (c *Channel)AddOrderers(orderer Order) error {
 	}
 
 	// sign for org_update_in_envelope.pb and update it
-	signs := []msp.SigningIdentity{}
-	mspClient, err := c.Organizations[0].NewMspClient()
+	orgs, err := c.GetOrganizations()
 	if err != nil {
-		return errors.WithMessage(err, "fail to get mspClient "+c.Organizations[0].Name)
+		return err
+	}
+
+	signs := []msp.SigningIdentity{}
+	mspClient, err := orgs[0].NewMspClient()
+	if err != nil {
+		return errors.WithMessage(err, "fail to get mspClient ")
 	}
 	adminIdentity, err := mspClient.GetSigningIdentity("Admin")
 	if err != nil {
-		return errors.WithMessage(err, c.Organizations[0].Name+"fail to sign")
+		return errors.WithMessage(err, "fail to sign")
 	}
 	signs = append(signs, adminIdentity)
 
@@ -586,19 +660,41 @@ func (c *Channel) RenderConfigtx() error {
 	}
 	defer writer.Close()
 
-	if err := templ.Execute(writer, c.Organizations[0]); err != nil {
+	orgs, err := c.GetOrganizations()
+	if err != nil {
+		return err
+	}
+
+	if err := templ.Execute(writer, orgs[0]); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Channel) RemoveAllEntity() {
-	global.Logger.Info("CC Entity is being removed...")
-	for _, cci := range c.Chaincodes {
-		kubernetes.NewChaincode(cci.NetworkID, cci.ChannelID, cci.PackageID, cci.CCID).Delete()
-		if err := DeleteChaincodeByID(cci.CCID); err != nil {
-			global.Logger.Error("fail to rm cc", zap.Error(err))
-		}
+func FindChannelByID(chID int) (*Channel, error) {
+	var chs []Channel
+	if err := global.DB.Where("id = ?", chID).Find(&chs).Error; err != nil {
+		return &Channel{}, err
 	}
+	return &chs[0], nil
+}
+
+func UpdateOrgIDs(chID, orgID int) error {
+	// 加个互斥锁
+	global.ChannelLock.Lock()
+	defer global.ChannelLock.Unlock()
+
+	ch, err := FindChannelByID(chID)
+	if err != nil {
+		return err
+	}
+
+	ch.OrganizationIDs = append(ch.OrganizationIDs, orgID)
+
+	return global.DB.Model(ch).Update("organization_ids", ch.OrganizationIDs).Error
+}
+
+func (c *Channel) UpdateStatus(status string) error {
+	return global.DB.Model(&Channel{}).Where("id = ?", c.ID).Update("status", status).Error
 }

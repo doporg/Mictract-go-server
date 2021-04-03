@@ -15,7 +15,6 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.POST("/", api.CreateNetwork)
 		NetworkRouter.GET("/", api.ListNetworks)
 		NetworkRouter.DELETE("/", api.DeleteNetwork)
-		NetworkRouter.GET("/:id", api.GetNetwork)
 	}
 
 	ChannelRouter := APIRoute.Group("channel")
@@ -57,6 +56,7 @@ func GetRouter() (router *gin.Engine) {
 	CCRouter := APIRoute.Group("chaincode")
 	{
 		CCRouter.POST("/", api.CreateChaincode)
+		CCRouter.PATCH("/peer", api.InstallChaincode)
 		CCRouter.POST("/:id", api.InvokeChaincode)
 		CCRouter.GET("/", api.ListChaincodes)
 	}

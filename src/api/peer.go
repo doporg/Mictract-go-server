@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"mictract/enum"
 	"mictract/model"
@@ -20,25 +19,15 @@ func AddPeer(c *gin.Context) {
 		return
 	}
 
-	orgUser := model.NewCaUserFromDomainName(info.Organization)
-
-	net, err := model.GetNetworkfromNets(orgUser.NetworkID)
+	org, err := model.FindOrganizationByID(info.OrganizationID)
 	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-
-	if orgUser.OrganizationID <= 0 || orgUser.OrganizationID > len(net.Organizations) {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage(fmt.Sprintf("org%d does not exist", orgUser.OrganizationID)).
-			Result(c.JSON)
-		return
-	}
-
 	for i := 0; i < info.PeerCount; i++ {
-		if err := net.Organizations[orgUser.OrganizationID].AddPeer(); err != nil {
+		if _, err := org.AddPeer(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
 				Result(c.JSON)
@@ -46,9 +35,7 @@ func AddPeer(c *gin.Context) {
 		}
 	}
 
-	net, _ = model.GetNetworkfromNets(net.ID)
 	response.Ok().
-		SetPayload(net).
 		Result(c.JSON)
 }
 
@@ -66,7 +53,15 @@ func ListPeersByOrganization(c *gin.Context) {
 	}
 
 	orgUser := model.NewCaUserFromDomainName(info.Organization)
-	org, err := model.GetOrgFromNets(orgUser.OrganizationID, orgUser.NetworkID)
+	org, err := model.FindOrganizationByID(orgUser.OrganizationID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	peers, err := org.GetPeers()
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -75,6 +70,6 @@ func ListPeersByOrganization(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(response.NewPeers(org.Peers)).
+		SetPayload(response.NewPeers(peers)).
 		Result(c.JSON)
 }

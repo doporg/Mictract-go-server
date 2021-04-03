@@ -1,9 +1,5 @@
 package init
 
-// If you want to initialize gorm, uncomment the code below.
-
-
-
 import (
 	"fmt"
 	"go.uber.org/zap"
@@ -21,7 +17,13 @@ func initDB() {
 	}
 
 	var err error
-	if global.DB, err = gorm.Open(mysql.New(mysqlConfig), &gorm.Config{}); err != nil {
+	if global.DB, err =
+		gorm.Open(
+			mysql.New(mysqlConfig),
+			&gorm.Config{
+				//Logger: logger.Default.LogMode(logger.Info),
+			},
+			); err != nil {
 		global.Logger.Error("Get database error", zap.Error(err))
 	}
 }
@@ -33,12 +35,12 @@ func closeDB() {
 
 func createTables() {
 	err := global.DB.AutoMigrate(
-		model.User{},
 		model.Network{},
+		model.Channel{},
+		model.Organization{},
+		model.CaUser{},
 		model.Chaincode{},
 	)
-
-
 
 	if err != nil {
 		global.Logger.Error("create tables failed", zap.Error(err))
@@ -46,43 +48,3 @@ func createTables() {
 		global.Logger.Info("tables created")
 	}
 }
-
-func initNetsAndSDKs() {
-	nets, err := model.QueryAllNetwork()
-	if err != nil {
-		global.Logger.Error("fail to get all network from db", zap.Error(err))
-	}
-	for _, net := range nets {
-		model.UpdateNets(net)
-		// model.UpdateSDK(net.ID)
-	}
-}
-
-// func createUsers() {
-// 	var users = []model.User{
-// 		{
-// 			Model: gorm.Model{
-// 				ID:        1,
-// 				CreatedAt: time.Now(),
-// 				UpdatedAt: time.Now(),
-// 				DeletedAt: gorm.DeletedAt{},
-// 			}, Name: "zhangsan", Age: 12,
-// 		},
-// 		{
-// 			Model: gorm.Model{
-// 				ID:        2,
-// 				CreatedAt: time.Now(),
-// 				UpdatedAt: time.Now(),
-// 				DeletedAt: gorm.DeletedAt{},
-// 			}, Name: "lisi", Age: 20,
-// 		},
-// 	}
-
-// if global.DB.Where("id in ?", []int{1, 2}).Find(&[]model.User{}).RowsAffected == 2 {
-// 	global.Logger.Info("user data has been initialized")
-// } else if err := global.DB.Create(&users).Error; err != nil {
-// 	global.Logger.Error("user data initialize error", zap.Error(err))
-// } else {
-// 	global.Logger.Info("user data initialized")
-// }
-// }

@@ -1,8 +1,7 @@
 package request
 
 type BlockInfo struct {
-	NetworkURL  string `form:"networkUrl" binding:"required"`
-	ChannelName string `form:"channelName" binding:"required"`
+	ChannelID 	int 	`form:"channelID" json:"channelID" binding:"required"`
 	// if blockID == -1 return blockHeight
-	BlockID 	int	   `form:"blockid"`
+	BlockID 	int	   	`form:"blockID" json:"blockID"`
 }
