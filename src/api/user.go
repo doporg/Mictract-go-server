@@ -3,10 +3,14 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	mspclient "github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	"mictract/service"
+	"mictract/service/factory"
+	"mictract/service/factory/sdk"
 	"net/http"
 )
 
@@ -30,14 +34,15 @@ func CreateUser(c *gin.Context) {
 			Result(c.JSON)
 		return
 	}
-	org, err = model.FindOrganizationByID(info.OrganizationID)
+
+	org, err = dao.FindOrganizationByID(info.OrganizationID)
 	if err != nil {
-		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	mspClient, err = org.NewMspClient()
+	mspClient, err = sdk.NewSDKClientFactory().NewMSPClient(org)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -47,9 +52,9 @@ func CreateUser(c *gin.Context) {
 
 	// insert into db
 	if info.Role == "user" {
-		user, err = model.NewUserCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
+		user, err = factory.NewCaUserFactory().NewUserCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
 	} else if info.Role == "admin" {
-		user, err = model.NewAdminCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
+		user, err = factory.NewCaUserFactory().NewAdminCaUser(org.ID, org.NetworkID, info.Nickname, info.Password, org.IsOrdererOrg)
 	} else {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage("only supports user and admin").
@@ -64,20 +69,21 @@ func CreateUser(c *gin.Context) {
 	}
 
 	// regiester
-	if err := user.Register(mspClient); err != nil {
+	userSvc := service.NewCaUserService(user)
+	if err := userSvc.Register(mspClient); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	if err := user.Enroll(mspClient, true); err != nil {
+	if err := userSvc.Enroll(mspClient, true); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	if err := user.Enroll(mspClient, false); err != nil {
+	if err := userSvc.Enroll(mspClient, false); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
@@ -92,7 +98,7 @@ func CreateUser(c *gin.Context) {
 // GET /api/user
 // return all users
 func ListUsers(c *gin.Context) {
-	users, err := model.FindAllCaUser()
+	users, err := dao.FindAllCaUser()
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -119,7 +125,7 @@ func DeleteUser(c *gin.Context) {
 			Result(c.JSON)
 		return
 	}
-	user, err = model.FindCaUserByID(info.UserID)
+	user, err = dao.FindCaUserByID(info.UserID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -138,7 +144,7 @@ func DeleteUser(c *gin.Context) {
 			Result(c.JSON)
 		return
 	}
-	org, err = model.FindOrganizationByID(user.OrganizationID)
+	org, err = dao.FindOrganizationByID(user.OrganizationID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -147,7 +153,7 @@ func DeleteUser(c *gin.Context) {
 	}
 
 	// revoke
-	mspClient, err = org.NewMspClient()
+	mspClient, err = sdk.NewSDKClientFactory().NewMSPClient(org)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
@@ -155,14 +161,16 @@ func DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := user.Revoke(mspClient); err != nil {
+	userSvc := service.NewCaUserService(user)
+
+	if err := userSvc.Revoke(mspClient); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrCA).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	if err := model.DeleteCaUserByID(user.ID); err != nil {
+	if err := dao.DeleteCaUserByID(user.ID); err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)

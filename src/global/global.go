@@ -16,7 +16,7 @@ var (
 	// global variables go here.
 	DB					*gorm.DB
 	Logger				*zap.Logger
-	SDKs				map[int]*fabsdk.FabricSDK
+	SDKs				map[string]*fabsdk.FabricSDK
 	K8sClientset		*kubernetes.Clientset
 	K8sRestConfig		*rest.Config
 	K8sInformer			cache.SharedIndexInformer

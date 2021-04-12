@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"mictract/config"
 	"mictract/global"
 	"mictract/model"
@@ -21,7 +22,7 @@ func initDB() {
 		gorm.Open(
 			mysql.New(mysqlConfig),
 			&gorm.Config{
-				//Logger: logger.Default.LogMode(logger.Info),
+				Logger: logger.Default.LogMode(logger.Error),
 			},
 			); err != nil {
 		global.Logger.Error("Get database error", zap.Error(err))
@@ -40,6 +41,7 @@ func createTables() {
 		model.Organization{},
 		model.CaUser{},
 		model.Chaincode{},
+		model.Certification{},
 	)
 
 	if err != nil {

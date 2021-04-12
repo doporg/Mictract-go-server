@@ -3,11 +3,14 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	respFactory "mictract/service/factory/response"
+	"mictract/service"
 	"net/http"
 )
 
@@ -25,7 +28,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	net, err = model.FindNetworkByID(info.NetworkID)
+	net, err = dao.FindNetworkByID(info.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -35,12 +38,12 @@ func AddChannel(c *gin.Context) {
 
 	go func() {
 		var ch *model.Channel
-		if ch, err = net.AddChannel(info.OrganizationIDs, info.Nickname); err != nil {
-			ch.UpdateStatus(enum.StatusError)
+		if ch, err = service.NewNetworkService(net).AddChannel(info.OrganizationIDs, info.Nickname); err != nil {
+			dao.UpdateChannelStatusByID(ch.ID, enum.StatusError)
 			global.Logger.Error("fail to add channel", zap.Error(err))
 			return
 		}
-		ch.UpdateStatus(enum.StatusRunning)
+		dao.UpdateChannelStatusByID(ch.ID, enum.StatusRunning)
 		global.Logger.Info("channel has been created successfully", zap.String("channelName", ch.GetName()))
 	}()
 
@@ -64,14 +67,7 @@ func GetChannelInfo(c *gin.Context) {
 	}
 
 	if info.NetworkID != 0 {
-		net, err := model.FindNetworkByID(info.NetworkID)
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
-		}
-		chs, err := net.GetChannels()
+		chs, err := dao.FindAllChannelsInNetwork(info.NetworkID)
 		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 				SetMessage(err.Error()).
@@ -80,11 +76,11 @@ func GetChannelInfo(c *gin.Context) {
 		}
 
 		response.Ok().
-			SetPayload(response.NewChannels(chs)).
+			SetPayload(respFactory.NewChannels(chs)).
 			Result(c.JSON)
 	} else {
 		ret := []model.Channel{}
-		nets, err := model.FindAllNetworks()
+		nets, err := dao.FindAllNetworks()
 		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 				SetMessage(err.Error()).
@@ -92,7 +88,7 @@ func GetChannelInfo(c *gin.Context) {
 		}
 
 		for _, net := range nets {
-			chs, err := net.GetChannels()
+			chs, err := dao.FindAllChannelsInNetwork(net.ID)
 			if err != nil {
 				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 					SetMessage(err.Error()).
@@ -102,7 +98,7 @@ func GetChannelInfo(c *gin.Context) {
 		}
 
 		response.Ok().
-			SetPayload(response.NewChannels(ret)).
+			SetPayload(respFactory.NewChannels(ret)).
 			Result(c.JSON)
 	}
 }

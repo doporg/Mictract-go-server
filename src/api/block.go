@@ -2,10 +2,12 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	"mictract/service"
 	"net/http"
 )
 
@@ -23,7 +25,7 @@ func GetBlockByBlockID(c *gin.Context) {
 		return
 	}
 
-	ch, err = model.FindChannelByID(info.ChannelID)
+	ch, err = dao.FindChannelByID(info.ChannelID)
 	if err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -32,7 +34,7 @@ func GetBlockByBlockID(c *gin.Context) {
 	}
 
 	if info.BlockID == -1 {
-		ret, err := ch.GetChannelInfo()
+		ret, err := service.NewChannelService(ch).GetChannelInfo()
 		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
 				SetMessage(err.Error()).
@@ -44,7 +46,7 @@ func GetBlockByBlockID(c *gin.Context) {
 			SetPayload(response.NewBlockHeightInfo(ret)).
 			Result(c.JSON)
 	} else {
-		ret, err := ch.GetBlock(uint64(info.BlockID))
+		ret, err := service.NewChannelService(ch).GetBlock(uint64(info.BlockID))
 		if err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
 				SetMessage(err.Error()).

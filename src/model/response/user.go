@@ -10,9 +10,6 @@ type User struct {
 	Nickname 		string 	`json:"nickname"`
 	OrganizationID 	int 	`json:"organizationID"`
 	NetworkID		int		`json:"networkID"`
-
-	PrivateKey 		string 	`json:"privateKey"`
-	Certificate 	string 	`json:"certificate"`
 }
 
 func NewUser(u model.CaUser) *User {
@@ -22,8 +19,6 @@ func NewUser(u model.CaUser) *User {
 		Nickname: u.Nickname,
 		OrganizationID: u.OrganizationID,
 		NetworkID: u.NetworkID,
-		PrivateKey: u.GetPrivateKey(),
-		Certificate: u.GetCert(),
 	}
 }
 

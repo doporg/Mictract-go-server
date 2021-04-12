@@ -22,7 +22,7 @@ type AddOrgReq struct {
 
 type AddOrdererReq struct {
 	NetworkID 	 		int 		`form:"networkID" json:"networkID" binding:"required"`
-	OrdererCount 	 	int 		`form:"ordererCount" json:"peerCount" binding:"required"`
+	OrdererCount 	 	int 		`form:"ordererCount" json:"ordererCount" binding:"required"`
 }
 
 type AddPeerReq struct {

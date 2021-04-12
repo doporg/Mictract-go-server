@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	respFactory "mictract/service/factory/response"
+	"mictract/service"
+	"mictract/service/factory"
 	"net/http"
 )
 
@@ -19,7 +23,6 @@ import (
 // param: AddBasicNetwork
 func CreateNetwork(c *gin.Context) {
 	var info request.AddNetworkReq
-	var err error
 
 	// check if request model contains some required fields.
 	if err := c.ShouldBindJSON(&info); err != nil {
@@ -71,9 +74,15 @@ func CreateNetwork(c *gin.Context) {
 	// check if the network name has existed.
 	// check if the new network configuration could be saved.
 	go func() {
-		var newNet *model.Network
-		if newNet, err = model.Deploy(info); err != nil {
-			newNet.UpdateStatus(enum.StatusError)
+		net, err	:= factory.NewNetworkFactory().NewNetwork(info.Nickname, info.Consensus)
+		if err != nil {
+			global.Logger.Error("fail to init net", zap.Error(err))
+			return
+		}
+		netSvc		:= service.NewNetworkService(net)
+
+		if err = netSvc.Deploy(); err != nil {
+			dao.UpdateNetworkStatusByID(net.ID, enum.StatusError)
 			global.Logger.Error("fail to deploy basic network ", zap.Error(err))
 			return
 		}
@@ -81,32 +90,33 @@ func CreateNetwork(c *gin.Context) {
 		// add rest org
 		for i := 0; i < len(info.PeerCounts); i++ {
 			var newOrg *model.Organization
-			if newOrg, err = newNet.AddOrg(info.OrgNicknames[i]); err != nil {
-				newNet.UpdateStatus(enum.StatusError)
+			if newOrg, err = netSvc.AddOrg(info.OrgNicknames[i]); err != nil {
+				dao.UpdateNetworkStatusByID(net.ID, enum.StatusError)
 				global.Logger.Error("fail to add rest org", zap.Error(err))
 				return
 			}
 			// add rest peer
 			for j := 0; j < info.PeerCounts[i] - 1; j++ {
-				if _, err := newOrg.AddPeer(); err != nil {
-					newNet.UpdateStatus(enum.StatusError)
+				if _, err := service.NewOrganizationService(newOrg).AddPeer(); err != nil {
+					dao.UpdateNetworkStatusByID(net.ID, enum.StatusError)
 					global.Logger.Error("fail to add rest peer", zap.Error(err))
 					return
 				}
 			}
+			dao.UpdateOrganizationStatusByID(newOrg.ID, enum.StatusRunning)
 		}
 
 
 		// add rest orderer
 		for i := 1; i < info.OrdererCount; i++ {
-			if err := newNet.AddOrderersToSystemChannel(); err != nil {
-				newNet.UpdateStatus(enum.StatusError)
+			if err := netSvc.AddOrderersToSystemChannel(); err != nil {
+				dao.UpdateNetworkStatusByID(net.ID, enum.StatusError)
 				global.Logger.Error("fail to add rest orderer", zap.Error(err))
 				return
 			}
 		}
-		newNet.UpdateStatus(enum.StatusRunning)
-		global.Logger.Info("network has been created successfully", zap.String("netName", newNet.GetName()))
+		dao.UpdateNetworkStatusByID(net.ID, enum.StatusRunning)
+		global.Logger.Info("network has been created successfully", zap.String("netName", net.GetName()))
 	}()
 
 	response.Ok().
@@ -116,13 +126,13 @@ func CreateNetwork(c *gin.Context) {
 // GET	/network
 // param: PageInfo
 func ListNetworks(c *gin.Context) {
-	if nets, err := model.FindAllNetworks(); err != nil {
+	if nets, err := dao.FindAllNetworks(); err != nil {
 		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 	} else {
 		response.Ok().
-			SetPayload(response.NewNetworks(nets)).
+			SetPayload(respFactory.NewNetworks(nets)).
 			Result(c.JSON)
 	}
 }
@@ -164,14 +174,15 @@ func DeleteNetwork(c *gin.Context) {
 		return
 	}
 
-	if global.DB.Where("id = ?", req.NetworkID).Find(&[]model.Network{}).RowsAffected == 0 {
-		response.Err(http.StatusBadRequest, enum.CodeErrNotFound).
-			SetMessage("network not found").
+	net, err := dao.FindNetworkByID(req.NetworkID)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
 
-	if err := model.DeleteNetworkByID(req.NetworkID); err != nil {
+	if err := service.NewNetworkService(net).Delete(); err != nil {
 		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
 			Result(c.JSON)

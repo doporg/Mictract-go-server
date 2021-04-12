@@ -2,10 +2,11 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"mictract/dao"
 	"mictract/enum"
-	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	"mictract/service"
 	"net/http"
 )
 
@@ -19,15 +20,16 @@ func AddPeer(c *gin.Context) {
 		return
 	}
 
-	org, err := model.FindOrganizationByID(info.OrganizationID)
+	org, err := dao.FindOrganizationByID(info.OrganizationID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
+	orgSvc := service.NewOrganizationService(org)
 	for i := 0; i < info.PeerCount; i++ {
-		if _, err := org.AddPeer(); err != nil {
+		if _, err := orgSvc.AddPeer(); err != nil {
 			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 				SetMessage(err.Error()).
 				Result(c.JSON)
@@ -42,7 +44,7 @@ func AddPeer(c *gin.Context) {
 // GET /api/peer
 func ListPeersByOrganization(c *gin.Context) {
 	info := struct {
-		Organization string `form:"organization" json:"organization"`
+		OrganizationID int `form:"organizationID" json:"organizationID"`
 	}{}
 
 	if err := c.ShouldBindQuery(&info); err != nil {
@@ -52,16 +54,7 @@ func ListPeersByOrganization(c *gin.Context) {
 		return
 	}
 
-	orgUser := model.NewCaUserFromDomainName(info.Organization)
-	org, err := model.FindOrganizationByID(orgUser.OrganizationID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	peers, err := org.GetPeers()
+	peers, err := dao.FindAllPeersInOrganization(info.OrganizationID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
