@@ -40,6 +40,12 @@ func GetRouter() (router *gin.Engine) {
 	{
 		PeerRouter.POST("/", api.AddPeer)
 		PeerRouter.GET("/", api.ListPeersByOrganization)
+
+		PeerChannelRouter := PeerRouter.Group("channel")
+		{
+			PeerChannelRouter.POST("/", api.JoinPeerToChannel)
+			PeerChannelRouter.GET("/", api.ListChannelsInPeer)
+		}
 	}
 
 	OrdererRouter := APIRoute.Group("orderer")

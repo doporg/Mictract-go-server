@@ -94,13 +94,19 @@ func (ns *NetworkService)Delete() error {
 	var ccs  []model.Chaincode
 	var err  error
 
-	// 1. remove organizations entity
+	// 1. remove organizations entity and close sdk
 	global.Logger.Info("1. remove organizations entity")
 	orgs, err = dao.FindAllOrganizationsInNetwork(ns.net.ID)
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
 	}
 	for _, org := range orgs {
+		orgSDK, ok := global.SDKs[org.GetName()]
+		if ok {
+			orgSDK.Close()
+			delete(global.SDKs, org.GetName())
+		}
+
 		NewOrganizationService(&org).RemoveAllEntity()
 	}
 

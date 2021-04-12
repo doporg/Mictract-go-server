@@ -153,6 +153,7 @@ func CreateChaincode(c *gin.Context)  {
 		// 5. approve (channel's org)
 		global.Logger.Info("approve chaincode")
 		for _, org := range chorgs {
+			global.Logger.Info(fmt.Sprintf("%s approve cc", org.GetName()))
 			adminUser, err := dao.FindSystemUserInOrganization(org.ID)
 			if err != nil {
 				global.Logger.Error("fail to get adminUser", zap.Error(err))
@@ -173,7 +174,10 @@ func CreateChaincode(c *gin.Context)  {
 				return
 			}
 
-			if err := ccSvc.ApproveCC(rc, orderers[0].GetName(), peers[0].GetName()); err != nil {
+			if err := ccSvc.ApproveCC(
+				rc,
+				orderers[0].GetName(),
+				peers[0].GetName()); err != nil {
 				global.Logger.Error("fail to approve cc", zap.Error(err))
 				dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 				return
