@@ -86,6 +86,30 @@ func (ns *NetworkService)Deploy() error {
 	return nil
 }
 
+// If the memory overflows, the problem may lie here
+func (ns *NetworkService)deleteGlobalSvc() {
+	// delete sdk and AdminSigns
+	orgs, _ := dao.FindAllOrganizationsInNetwork(ns.net.ID)
+	for _, org := range orgs {
+		orgSDK, ok := global.SDKs[org.GetName()]
+		if ok {
+			orgSDK.Close()
+			delete(global.SDKs, org.GetName())
+		}
+
+		adminUser, _ := dao.FindSystemUserInOrganization(org.ID)
+		delete(global.AdminSigns, adminUser.GetName())
+	}
+	netSDK, ok := global.SDKs[ns.net.GetName()]
+	if ok {
+		netSDK.Close()
+		delete(global.SDKs, ns.net.GetName())
+	}
+
+	// delete adminSign
+
+}
+
 func (ns *NetworkService)Delete() error {
 	global.Logger.Info(fmt.Sprintf("[Delete %s]", ns.net.GetName()))
 	defer global.Logger.Info(fmt.Sprintf("[Delete %s] done!", ns.net.GetName()))
@@ -94,6 +118,9 @@ func (ns *NetworkService)Delete() error {
 	var ccs  []model.Chaincode
 	var err  error
 
+	// 0.
+	ns.deleteGlobalSvc()
+
 	// 1. remove organizations entity and close sdk
 	global.Logger.Info("1. remove organizations entity")
 	orgs, err = dao.FindAllOrganizationsInNetwork(ns.net.ID)
@@ -101,12 +128,6 @@ func (ns *NetworkService)Delete() error {
 		global.Logger.Error("", zap.Error(err))
 	}
 	for _, org := range orgs {
-		orgSDK, ok := global.SDKs[org.GetName()]
-		if ok {
-			orgSDK.Close()
-			delete(global.SDKs, org.GetName())
-		}
-
 		NewOrganizationService(&org).RemoveAllEntity()
 	}
 
@@ -350,10 +371,21 @@ func (ns *NetworkService) AddChannel(orgIDs []int, nickname string) (*model.Chan
 		}
 	}
 
+	// 5.1 updata anchors (the first org in channel)
+	global.Logger.Info("5.1 updata anchors (the first org in channel)")
+	if err := chSvc.UpdateAnchors(ch.OrganizationIDs[0]); err != nil {
+		return ch, err
+	}
+
+	// WTF? If you don’t wait, you will get an outdated configuration and return an error
+	time.Sleep(5 * time.Second)
+
 	// 6. Dynamically add remaining organizations to the channel
 	global.Logger.Info("6. Dynamically add remaining organizations to the channel")
 	for i := 1; i < len(orgIDs); i++ {
 		global.Logger.Info(fmt.Sprintf(" ┗ add org%d to channel%d", orgIDs[i], ch.ID))
+		// WTF? If you don’t wait, you will get an outdated configuration and return an error
+		time.Sleep(5 * time.Second)
 		if err := chSvc.AddOrg(orgIDs[i]); err != nil {
 			return ch, err
 		}
@@ -363,8 +395,18 @@ func (ns *NetworkService) AddChannel(orgIDs []int, nickname string) (*model.Chan
 	time.Sleep(5 * time.Second)
 
 	// 7. Dynamically join remaining peer to the channel
+	/*
+		"Tried joining channel channel3 but our org( org2MSP ), isn't among the orgs of the channel: [org3MSP] , aborting."
+		If the above error occurs in the peer container
+		just fuck blockchain
+	*/
 	global.Logger.Info("7. Dynamically join remaining peer to the channel")
 	for i := 1; i < len(orgIDs); i++ {
+		global.Logger.Info(fmt.Sprintf(" update anchors(org%d)", orgIDs[i]))
+		if err := chSvc.UpdateAnchors(orgIDs[i]); err != nil {
+			return ch, err
+		}
+
 		peers, err := dao.FindAllPeersInOrganization(orgIDs[i])
 		if err != nil {
 			global.Logger.Error("", zap.Error(err))
@@ -372,11 +414,14 @@ func (ns *NetworkService) AddChannel(orgIDs []int, nickname string) (*model.Chan
 		}
 		for _, peer := range peers {
 			global.Logger.Info(fmt.Sprintf("%s join channel", peer.GetName()))
-			if err := NewCaUserService(&peer).JoinChannel(
-				ch.ID,
-				orderers[0].GetName()); err != nil {
-				global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.GetName(), ch.ID), zap.Error(err))
-			}
+			go func(){
+				time.Sleep(5 * time.Second)
+				if err := NewCaUserService(&peer).JoinChannel(
+					ch.ID,
+					orderers[0].GetName()); err != nil {
+					global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.GetName(), ch.ID), zap.Error(err))
+				}
+			}()
 		}
 	}
 

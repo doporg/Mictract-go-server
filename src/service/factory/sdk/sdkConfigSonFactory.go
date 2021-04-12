@@ -28,9 +28,9 @@ func (sdkCSF *SDKConfigSonFactory)NewSDKConfigClient(org *model.Organization) *m
 }
 
 func (sdkCSF *SDKConfigSonFactory)NewSDKConfigOrganization(org *model.Organization) *model.SDKConfigOrganization {
-	peers, _ := dao.FindAllPeersInOrganization(org.ID)
-	users, _ := dao.FindUserAndAdminInOrganization(org.ID)
-	ret := &model.SDKConfigOrganization{
+	peers, _ 	:= dao.FindAllPeersInOrganization(org.ID)
+	users, _ 	:= dao.FindUserAndAdminInOrganization(org.ID)
+	ret 		:= &model.SDKConfigOrganization{
 		Mspid:                  org.GetMSPID(),
 		Peers:                  []string{},
 		Users: 					map[string]*model.SDKConfigOrganizationUser{},

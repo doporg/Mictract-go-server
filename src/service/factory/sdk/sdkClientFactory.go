@@ -47,8 +47,40 @@ func (sdkCF *SDKClientFactory) NewResmgmtClient(user *model.CaUser) (*resmgmt.Cl
 	return resmgmtClient, nil
 }
 
+func (sdkCF *SDKClientFactory) NewResmgmtClientIncludeNetwork(user *model.CaUser) (*resmgmt.Client, error) {
+	sdk, err := NewSDKFactory().NewCompleteSDKByNetworkID(user.NetworkID)
+	//sdk, err := NewSDKFactory().NewOrgSDKByOrganizationID(user.OrganizationID)
+	if err != nil {
+		return &resmgmt.Client{}, errors.WithMessage(err, "fail to get sdk ")
+	}
+	resmgmtClient, err := resmgmt.New(sdk.Context(
+		fabsdk.WithUser(user.GetName()),
+		fabsdk.WithOrg(model.GetOrganizationNameByIDAndBool(user.OrganizationID, user.IsInOrdererOrg()))))
+	if err != nil {
+		return &resmgmt.Client{}, err
+	}
+	return resmgmtClient, nil
+}
+
 func (sdkCF *SDKClientFactory) NewChannelClient(user *model.CaUser, ch *model.Channel) (*channelclient.Client, error) {
 	sdk, err := NewSDKFactory().NewOrgSDKByOrganizationID(user.OrganizationID)
+	if err != nil {
+		return &channelclient.Client{}, errors.WithMessage(err, "fail to get sdk ")
+	}
+	ccp := sdk.ChannelContext(
+		ch.GetName(),
+		fabsdk.WithUser(user.GetName()),
+		fabsdk.WithOrg(model.GetOrganizationNameByIDAndBool(user.OrganizationID, user.IsInOrdererOrg())))
+	chClient, err := channelclient.New(ccp)
+	if err != nil {
+		return &channelclient.Client{}, err
+	}
+	return chClient, nil
+}
+
+func (sdkCF *SDKClientFactory) NewChannelClientIncludeNetwork(user *model.CaUser, ch *model.Channel) (*channelclient.Client, error) {
+	sdk, err := NewSDKFactory().NewCompleteSDKByNetworkID(user.NetworkID)
+	//sdk, err := NewSDKFactory().NewOrgSDKByOrganizationID(user.OrganizationID)
 	if err != nil {
 		return &channelclient.Client{}, errors.WithMessage(err, "fail to get sdk ")
 	}

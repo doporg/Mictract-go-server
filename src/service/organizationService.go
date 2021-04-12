@@ -33,9 +33,15 @@ func (orgSvc *OrganizationService) GetAdminSigningIdentity() (msp.SigningIdentit
 	defer global.Logger.Info(fmt.Sprintf("[Get %s admin signing identity] done!", orgSvc.org.GetName()))
 
 	// 1. get admin user
-	adminUsername, err := dao.FindSystemUserInOrganization(orgSvc.org.ID)
+	adminUser, err := dao.FindSystemUserInOrganization(orgSvc.org.ID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Cache
+	as, ok := global.AdminSigns[adminUser.GetName()]
+	if ok {
+		return *as, nil
 	}
 
 	// 2. get msp client
@@ -45,10 +51,13 @@ func (orgSvc *OrganizationService) GetAdminSigningIdentity() (msp.SigningIdentit
 	}
 
 	// 3. get admin signing identity
-	adminIdentity, err := mspClient.GetSigningIdentity(adminUsername.GetName())
+	adminIdentity, err := mspClient.GetSigningIdentity(adminUser.GetName())
 	if err != nil {
 		return nil, errors.WithMessage(err, orgSvc.org.GetName()+"fail to sign")
 	}
+
+	// Cache
+	global.AdminSigns[adminUser.GetName()] = &adminIdentity
 	return adminIdentity, nil
 }
 

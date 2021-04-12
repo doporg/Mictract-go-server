@@ -34,6 +34,25 @@ func NewChannelService(ch *model.Channel) *ChannelService {
 	}
 }
 
+func (cSvc *ChannelService)GetAllAdminSigningIdentities() ([]msp.SigningIdentity, error) {
+	global.Logger.Info("[[Get all admin signing identites in channel]]")
+	orgs, err := dao.FindAllOrganizationsInChannel(cSvc.ch)
+	if err != nil {
+		return []msp.SigningIdentity{}, err
+	}
+
+	signs := []msp.SigningIdentity{}
+	for _, org := range orgs {
+		sign, err := NewOrganizationService(&org).GetAdminSigningIdentity()
+		if err != nil {
+			return signs, err
+		}
+		signs = append(signs, sign)
+	}
+
+	return signs, nil
+}
+
 func (cSvc *ChannelService)CreateChannel(ordererURL string) error {
 	global.Logger.Info("[channel is creating]")
 	defer global.Logger.Info("[channel is creating] done!")
@@ -43,15 +62,16 @@ func (cSvc *ChannelService)CreateChannel(ordererURL string) error {
 		model.GetNetworkNameByID(cSvc.ch.NetworkID),
 		fmt.Sprintf("%s.tx", cSvc.ch.GetName()))
 
-	net, err := dao.FindNetworkByID(cSvc.ch.NetworkID)
+	orgID := cSvc.ch.OrganizationIDs[0]
+	org, err := dao.FindOrganizationByID(orgID)
 	if err != nil {
 		return err
 	}
-	netSvc := NewNetworkService(net)
 
 	// 1. get signs
 	global.Logger.Info("1. Obtaining admin signature...")
-	adminIdentitys, err := netSvc.GetAllAdminSigningIdentities()
+	adminIdentity, err := NewOrganizationService(org).GetAdminSigningIdentity()
+		//netSvc.GetAllAdminSigningIdentities()
 	if err != nil {
 		return errors.WithMessage(err, "fail to get all SigningIdentities")
 	}
@@ -60,11 +80,10 @@ func (cSvc *ChannelService)CreateChannel(ordererURL string) error {
 	req := resmgmt.SaveChannelRequest{
 		ChannelID: cSvc.ch.GetName(),
 		ChannelConfigPath: channelConfigTxPath,
-		SigningIdentities: adminIdentitys,
+		SigningIdentities: []msp.SigningIdentity{adminIdentity},
 	}
 
 	// 3. get rc
-	orgID := cSvc.ch.OrganizationIDs[0]
 	adminUser, err := dao.FindSystemUserInOrganization(orgID)
 	if err != nil {
 		return err
@@ -77,7 +96,10 @@ func (cSvc *ChannelService)CreateChannel(ordererURL string) error {
 
 	// 4. submitting
 	global.Logger.Info("2. Submitting to create channel transaction...")
-	_, err = rc.SaveChannel(req, resmgmt.WithRetry(retry.DefaultResMgmtOpts), resmgmt.WithOrdererEndpoint(ordererURL))
+	_, err = rc.SaveChannel(
+		req,
+		resmgmt.WithRetry(retry.DefaultResMgmtOpts),
+		resmgmt.WithOrdererEndpoint(ordererURL))
 
 	return err
 }
@@ -287,10 +309,6 @@ func (cSvc *ChannelService) AddOrg(orgID int) error {
 	if err != nil {
 		return err
 	}
-	net, err := dao.FindNetworkByID(cSvc.ch.NetworkID)
-	if err != nil {
-		return err
-	}
 
 	// 1. Obtaining channel config
 	global.Logger.Info("1. Obtaining channel config")
@@ -324,7 +342,8 @@ func (cSvc *ChannelService) AddOrg(orgID int) error {
 
 	// 4. sign for org_update_in_envelope.pb
 	global.Logger.Info("4. sign for org_update_in_envelope.pb")
-	signs, err := NewNetworkService(net).GetAllAdminSigningIdentities()
+	signs, err := cSvc.GetAllAdminSigningIdentities()
+		//NewNetworkService(net).GetAllAdminSigningIdentities()
 	if err != nil {
 		return err
 	}
@@ -341,7 +360,6 @@ func (cSvc *ChannelService) AddOrg(orgID int) error {
 func (cSvc *ChannelService)UpdateAnchors(orgID int) error {
 	global.Logger.Info("[[update anchor]]")
 	// 不要让用户自定义了，让所有peer都成为锚节点
-	global.Logger.Info("Update anchors...")
 	if orgID <= 0 {
 		return errors.New(fmt.Sprintf("org ID is incorrect. ID: %d", orgID))
 	}
@@ -370,7 +388,7 @@ func (cSvc *ChannelService)UpdateAnchors(orgID int) error {
 	for _, peer := range peers {
 		st += `{"host":"` + peer.GetURL() + `","port":7051},`
 	}
-	st += `{"host":"` + "lilingj.github.io" + `","port":7051},`
+	//st += `{"host":"` + "lilingj.github.io" + `","port":7051},`
 	// jq这个坑货，多一个逗号就解析不出来
 	st = st[:(len(st) - 1)]
 	st += `]},"version":"0"}`

@@ -8,6 +8,7 @@ import (
 	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
+	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
 	"mictract/service"
@@ -86,12 +87,6 @@ func CreateChaincode(c *gin.Context)  {
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 			return
 		}
-		netorgs, err := dao.FindAllOrganizationsInNetwork(ch.NetworkID)
-		if err != nil {
-			global.Logger.Error("fail to get all orgs", zap.Error(err))
-			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-			return
-		}
 		orderers, err := dao.FindAllOrderersInNetwork(ch.NetworkID)
 		if err != nil {
 			global.Logger.Error("fail to get peers", zap.Error(err))
@@ -107,45 +102,33 @@ func CreateChaincode(c *gin.Context)  {
 			return
 		}
 
+		// install all peer in channel
+		go func() {
+			orgs, _ := dao.FindAllOrganizationsInChannel(ch)
+			for _, org := range orgs {
+				go func(org model.Organization) {
+					global.Logger.Info(fmt.Sprintf("install %s to %s", cc.GetName(), org.GetName()))
+					adminUser, err := dao.FindSystemUserInOrganization(org.ID)
+					if err != nil {
+						return
+					}
+					rc, err := sdk.NewSDKClientFactory().NewResmgmtClient(adminUser)
+					if err != nil {
+						return
+					}
+					if err := ccSvc.InstallCC(rc); err != nil {
+						return
+					}
+				}(org)
+			}
+		}()
+
 		// 3. build
 		global.Logger.Info("build chaincode")
 		ccSvc := service.NewChaincodeService(cc)
 		dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusBuilding)
 		if err := ccSvc.Build(); err != nil {
 			global.Logger.Error("fail to build cc ", zap.Error(err))
-			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-			return
-		}
-
-		// 4. install (any peers)
-		global.Logger.Info("install chaincode")
-		global.Logger.Info(fmt.Sprintf("%v", ch))
-		orgs, err := dao.FindAllOrganizationsInChannel(ch)
-		if err != nil {
-			global.Logger.Error("fail to get orgs ", zap.Error(err))
-			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-			return
-		}
-		for _, org := range orgs {
-			global.Logger.Info("Obtaining rc...")
-			adminUser, err := dao.FindSystemUserInOrganization(org.ID)
-			if err != nil {
-				global.Logger.Error("fail to get adminUser", zap.Error(err))
-				continue
-			}
-			rc, err := sdk.NewSDKClientFactory().NewResmgmtClient(adminUser)
-			if err != nil {
-				global.Logger.Error("fail to get rc", zap.Error(err))
-				continue
-			}
-			if err := ccSvc.InstallCC(rc); err != nil {
-				global.Logger.Error(fmt.Sprintf("fail to install cc to org%d", org.ID), zap.Error(err))
-				continue
-			}
-			break
-		}
-		if cc.PackageID == "" {
-			// 任何一次成功的安装都将更新这个值
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 			return
 		}
@@ -188,44 +171,47 @@ func CreateChaincode(c *gin.Context)  {
 		}
 
 		// 6. commmit
+		// note: "implicit policy evaluation failed" if use rc(include org)
+		//       you should use rc(include network) to get enough endoerment
 		global.Logger.Info("commit chaincode")
+		orgID := chorgs[0].ID
 		peerURLs := []string{}
-		for _, org := range netorgs {
-			if org.IsOrdererOrganization() {
-				continue
-			}
-			peers, err := dao.FindAllPeersInOrganization(org.ID)
-			if err != nil {
-				global.Logger.Error("fail to get peer", zap.Error(err))
-				dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-				return
-			}
-			for _, peer := range peers {
-				peerURLs = append(peerURLs, peer.GetName())
-			}
+		peers, err := dao.FindAllPeersInChannel(ch)
+		if err != nil {
+			global.Logger.Error("fail to get peer", zap.Error(err))
+			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
+			return
+		}
+		for _, peer := range peers {
+			peerURLs = append(peerURLs, peer.GetName())
 		}
 
-		global.Logger.Info("Obtaining rc...")
-		adminUser, err := dao.FindSystemUserInOrganization(chorgs[0].ID)
+		global.Logger.Info("Obtaining rc(include network)...")
+		adminUser, err := dao.FindSystemUserInOrganization(orgID)
 		if err != nil {
 			global.Logger.Error("fail to get adminUser", zap.Error(err))
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 			return
 		}
-		rc, err := sdk.NewSDKClientFactory().NewResmgmtClient(adminUser)
+		rc, err := sdk.NewSDKClientFactory().NewResmgmtClientIncludeNetwork(adminUser)
 		if err != nil {
 			global.Logger.Error("fail to get rc", zap.Error(err))
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 			return
 		}
 
-		if err := ccSvc.CommitCC(rc, orderers[0].GetName(), peerURLs...); err != nil {
+		if err := ccSvc.CommitCC(
+			rc,
+			orderers[0].GetName(),
+			peerURLs...,
+			); err != nil {
 			global.Logger.Error("fail to commit cc", zap.Error(err))
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
 			return
 		}
 
 		// 7. start cc container
+		global.Logger.Info("start cc container")
 		if err := ccSvc.CreateEntity(); err != nil {
 			global.Logger.Error("fail to create cc container", zap.Error(err))
 			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
@@ -346,7 +332,7 @@ func InvokeChaincode(c *gin.Context)  {
 			Result(c.JSON)
 		return
 	}
-	chClient, err := sdk.NewSDKClientFactory().NewChannelClient(adminUser, ch)
+	chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(adminUser, ch)
 	if err != nil {
 		global.Logger.Error("fail to get channel client", zap.Error(err))
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).

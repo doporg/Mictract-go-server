@@ -21,17 +21,16 @@ func NewSDKFactory() *SDKFactory {
 }
 
 func (sdkf *SDKFactory)NewOrgSDKByOrganizationID(orgID int) (*fabsdk.FabricSDK, error) {
-	configObj := sdkf.newSDKConfigByOrganizationID(orgID)
-
-	sdkconfig, err := yaml.Marshal(configObj)
+	configObj 		:= sdkf.newSDKConfigByOrganizationID(orgID)
+	org, _ 			:= dao.FindOrganizationByID(orgID)
+	sdkconfig, err 	:= yaml.Marshal(configObj)
 	if err != nil {
 		return &fabsdk.FabricSDK{}, err
 	}
 
 	// global.Logger.Info(string(sdkconfig))
 	// for debug
-	org, _ := dao.FindOrganizationByID(orgID)
-	sdkf._store(filepath.Join(mConfig.LOCAL_BASE_PATH, model.GetNetworkNameByID(org.NetworkID), "sdk"),
+	go sdkf._store(filepath.Join(mConfig.LOCAL_BASE_PATH, model.GetNetworkNameByID(org.NetworkID), "sdk"),
 		fmt.Sprintf("%s.yaml", org.GetName()),
 		string(sdkconfig),
 	)
@@ -45,16 +44,15 @@ func (sdkf *SDKFactory)NewOrgSDKByOrganizationID(orgID int) (*fabsdk.FabricSDK, 
 }
 
 func (sdkf *SDKFactory)NewCompleteSDKByNetworkID(netID int) (*fabsdk.FabricSDK, error) {
-	configObj := sdkf.newSDKConfigByNetworkID(netID)
-
-	sdkconfig, err := yaml.Marshal(configObj)
+	configObj 		:= sdkf.newSDKConfigByNetworkID(netID)
+	sdkconfig, err 	:= yaml.Marshal(configObj)
 	if err != nil {
 		return &fabsdk.FabricSDK{}, err
 	}
 
 	// global.Logger.Info(string(sdkconfig))
 	// for debug
-	sdkf._store(filepath.Join(mConfig.LOCAL_BASE_PATH, model.GetNetworkNameByID(netID), "sdk"),
+	go sdkf._store(filepath.Join(mConfig.LOCAL_BASE_PATH, model.GetNetworkNameByID(netID), "sdk"),
 		fmt.Sprintf("%s.yaml", model.GetNetworkNameByID(netID)),
 		string(sdkconfig),
 	)
@@ -68,11 +66,11 @@ func (sdkf *SDKFactory)NewCompleteSDKByNetworkID(netID int) (*fabsdk.FabricSDK, 
 }
 
 func (sdkf *SDKFactory)newSDKConfigByNetworkID(netID int) *model.SDKConfig {
-	netPeers, _		:= dao.FindAllPeersInNetwork(netID)
-	orgs, _ 		:= dao.FindAllOrganizationsInNetwork(netID)
-	sdkCSF 			:= NewSDKConfigSonFactory()
-
-	sdkconfig 		:= sdkf.newCommonSDKConfigByNetworkID(netID)
+	netPeers, _			:= dao.FindAllPeersInNetwork(netID)
+	orgs, _ 			:= dao.FindAllOrganizationsInNetwork(netID)
+	sdkCSF 				:= NewSDKConfigSonFactory()
+	sdkconfig 			:= sdkf.newCommonSDKConfigByNetworkID(netID)
+	sdkconfig.Client	= sdkCSF.NewSDKConfigClient(&orgs[0])
 
 	for _, org := range orgs {
 		sdkconfig.Organizations[org.GetName()] 			= sdkCSF.NewSDKConfigOrganization(&org)
@@ -86,14 +84,14 @@ func (sdkf *SDKFactory)newSDKConfigByNetworkID(netID int) *model.SDKConfig {
 }
 
 func (sdkf *SDKFactory)newSDKConfigByOrganizationID(orgID int) *model.SDKConfig {
-	sdkCSF 		:= NewSDKConfigSonFactory()
-	org, _ 		:= dao.FindOrganizationByID(orgID)
-	peers, _ 	:= dao.FindAllPeersInOrganization(orgID)
-
+	sdkCSF 											:= NewSDKConfigSonFactory()
+	org, _ 											:= dao.FindOrganizationByID(orgID)
+	peers, _ 										:= dao.FindAllPeersInOrganization(orgID)
 	sdkconfig 										:= sdkf.newCommonSDKConfigByNetworkID(org.NetworkID)
 	sdkconfig.Client 								= sdkCSF.NewSDKConfigClient(org)
 	sdkconfig.Organizations[org.GetName()] 			= sdkCSF.NewSDKConfigOrganization(org)
 	sdkconfig.CertificateAuthorities[org.GetCAID()] = sdkCSF.NewSDKConfigCA(org)
+
 	for _, peer := range peers {
 		sdkconfig.Peers[peer.GetName()] = sdkCSF.NewSDKConfigNode(&peer)
 	}
@@ -108,7 +106,7 @@ func (sdkf *SDKFactory)newCommonSDKConfigByNetworkID(netID int) *model.SDKConfig
 	sdkCSF 			:= NewSDKConfigSonFactory()
 
 	sdkconfig := &model.SDKConfig{
-		Version: 				"GoldBlessNoBug",
+		Version: 				"GodBlessNoBug",
 		Client: 				&model.SDKConfigClient{},
 		Organizations:          map[string]*model.SDKConfigOrganization{},
 		Orderers:               map[string]*model.SDKConfigNode{},

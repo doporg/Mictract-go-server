@@ -18,6 +18,8 @@ import (
 	"mictract/model"
 	"mictract/model/kubernetes"
 	"path/filepath"
+
+	lcpackager "github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/lifecycle"
 )
 
 type ChaincodeService struct {
@@ -28,6 +30,19 @@ func NewChaincodeService(cc *model.Chaincode) *ChaincodeService {
 	return &ChaincodeService{
 		cc: cc,
 	}
+}
+
+// 本地打包和安装后生成的不同 why？
+func (ccSvc *ChaincodeService)GetPackageID(label string, ccPkg []byte) string {
+	return lcpackager.ComputePackageID(label, ccPkg)
+}
+
+func (ccSvc *ChaincodeService)GeneratePolicy(policyStr string) (*cb.SignaturePolicyEnvelope, error) {
+	return policydsl.FromString(policyStr)
+}
+
+func (ccSvc *ChaincodeService)GetCCPkg() ([]byte, error) {
+	return ccSvc.PackageExternalCC(ccSvc.cc.Label, ccSvc.cc.GetAddress())
 }
 
 func (ccSvc *ChaincodeService)Unpack() error {
@@ -42,6 +57,17 @@ func (ccSvc *ChaincodeService)Unpack() error {
 		dao.UpdateChaincodeStatusByID(ccSvc.cc.ID, enum.StatusError)
 		return err
 	}
+
+	ccPkg, err := ccSvc.GetCCPkg()
+	if err != nil {
+		return err
+	}
+	packageID := ccSvc.GetPackageID(ccSvc.cc.Label, ccPkg)
+	if err := dao.UpdateChaincodePackageIDByID(ccSvc.cc.ID, packageID); err != nil {
+		return err
+	}
+	global.Logger.Info("├── test_local_packageID: " + packageID)
+
 	return nil
 }
 
@@ -110,14 +136,6 @@ func writePackage(tw *tar.Writer, name string, payload []byte) error {
 	return err
 }
 
-func (ccSvc *ChaincodeService)GeneratePolicy(policyStr string) (*cb.SignaturePolicyEnvelope, error) {
-	return policydsl.FromString(policyStr)
-}
-
-func (ccSvc *ChaincodeService)GetCCPkg() ([]byte, error) {
-	return ccSvc.PackageExternalCC(ccSvc.cc.Label, ccSvc.cc.GetAddress())
-}
-
 // If peerURLs are omitted, the chaincode will be installed on
 // all peers in the organization specified by orgResMgmt
 func (ccSvc *ChaincodeService)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...string) error {
@@ -147,6 +165,7 @@ func (ccSvc *ChaincodeService)InstallCC(orgResMgmt *resmgmt.Client, peerURLs ...
 
 	global.Logger.Info("chaincode installed successfully")
 	for _, resp := range resps {
+		global.Logger.Info("├── test_local_packageID: " + ccSvc.GetPackageID(ccSvc.cc.Label, ccPkg))
 		global.Logger.Info("├── target: " + resp.Target)
 		global.Logger.Info(fmt.Sprintf("├── status: %d", resp.Status))
 		global.Logger.Info("└── packageID: " + resp.PackageID)
@@ -167,7 +186,7 @@ func (ccSvc *ChaincodeService)ApproveCC(orgResMgmt *resmgmt.Client, ordererURL s
 		return err
 	}
 	approveCCReq := resmgmt.LifecycleApproveCCRequest{
-		Name:              ccSvc.cc.Label,
+		Name:              ccSvc.cc.GetName(),
 		Version:           ccSvc.cc.Version,
 		PackageID:         ccSvc.cc.PackageID,
 		Sequence:          ccSvc.cc.Sequence,
@@ -203,7 +222,7 @@ func (ccSvc *ChaincodeService)CheckCCCommitReadiness(orgResMgmt *resmgmt.Client,
 	}
 
 	req := resmgmt.LifecycleCheckCCCommitReadinessRequest{
-		Name:              ccSvc.cc.Label,
+		Name:              ccSvc.cc.GetName(),
 		Version:           ccSvc.cc.Version,
 		EndorsementPlugin: "escc",
 		ValidationPlugin:  "vscc",
@@ -231,7 +250,7 @@ func (ccSvc *ChaincodeService)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl st
 	}
 
 	req := resmgmt.LifecycleCommitCCRequest{
-		Name:              ccSvc.cc.Label,
+		Name:              ccSvc.cc.GetName(),
 		Version:           ccSvc.cc.Version,
 		Sequence:          ccSvc.cc.Sequence,
 		EndorsementPlugin: "escc",
@@ -256,7 +275,7 @@ func (ccSvc *ChaincodeService)CommitCC(orgResMgmt *resmgmt.Client, ordererUrl st
 
 func (ccSvc *ChaincodeService)QueryCommittedCC(orgResMgmt *resmgmt.Client) error {
 	req := resmgmt.LifecycleQueryCommittedCCRequest{
-		Name: ccSvc.cc.Label,
+		Name: ccSvc.cc.GetName(),
 	}
 
 	resps, err := orgResMgmt.LifecycleQueryCommittedCC(
@@ -299,7 +318,7 @@ func (ccSvc *ChaincodeService)InitCC(channelClient *channel.Client, args []strin
 	}
 	response, err := channelClient.Execute(
 		channel.Request{
-			ChaincodeID: ccSvc.cc.Label,
+			ChaincodeID: ccSvc.cc.GetName(),
 			Fcn: args[0],
 			Args: _args,
 			IsInit: true},
@@ -326,7 +345,7 @@ func (ccSvc *ChaincodeService)ExecuteCC(channelClient *channel.Client, args []st
 
 	response, err := channelClient.Execute(
 		channel.Request{
-			ChaincodeID: ccSvc.cc.Label,
+			ChaincodeID: ccSvc.cc.GetName(),
 			Fcn: args[0],
 			Args: _args},
 		channel.WithRetry(retry.DefaultChannelOpts),
@@ -350,7 +369,7 @@ func (ccSvc *ChaincodeService)QueryCC(channelClient *channel.Client, args []stri
 
 	response, err := channelClient.Query(
 		channel.Request{
-			ChaincodeID: ccSvc.cc.Label,
+			ChaincodeID: ccSvc.cc.GetName(),
 			Fcn: args[0],
 			Args: _args},
 		channel.WithRetry(retry.DefaultChannelOpts),
