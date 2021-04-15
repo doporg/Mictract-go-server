@@ -354,6 +354,7 @@ func (cSvc *ChannelService) AddOrg(orgID int) error {
 		return err
 	}
 
+	cSvc.ch.OrganizationIDs = append(cSvc.ch.OrganizationIDs, orgID)
 	return dao.UpdateOrgIDs(cSvc.ch.ID, orgID)
 }
 
