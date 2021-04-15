@@ -1,6 +1,7 @@
 package dao
 
 import (
+	"github.com/pkg/errors"
 	"mictract/global"
 	"mictract/model"
 )
@@ -44,6 +45,9 @@ func FindCaUserByID(id int) (*model.CaUser, error) {
 	var cus []model.CaUser
 	if err := global.DB.Where("id = ?", id).Find(&cus).Error; err != nil {
 		return &model.CaUser{}, err
+	}
+	if len(cus) == 0 {
+		return &model.CaUser{}, errors.New("user not found")
 	}
 	return &cus[0], nil
 }

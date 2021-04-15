@@ -308,6 +308,13 @@ func InvokeChaincode(c *gin.Context)  {
 	}
 	ccSvc := service.NewChaincodeService(cc)
 
+	if cc.Status != enum.StatusRunning {
+		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+			SetMessage(fmt.Sprintf("the chaincode%d's status is %s", ccID, cc.Status)).
+			Result(c.JSON)
+		return
+	}
+
 	ch, err := dao.FindChannelByID(cc.ChannelID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
@@ -316,23 +323,16 @@ func InvokeChaincode(c *gin.Context)  {
 		return
 	}
 
-	orgs, err := dao.FindAllOrganizationsInChannel(ch)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
 	global.Logger.Info("Obtaining channel client...")
-	adminUser, err := dao.FindSystemUserInOrganization(orgs[0].ID)
+	user, err := dao.FindCaUserByID(info.UserID)
+	//adminUser, err := dao.FindSystemUserInOrganization(orgs[0].ID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-	chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(adminUser, ch)
+	chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(user, ch)
 	if err != nil {
 		global.Logger.Error("fail to get channel client", zap.Error(err))
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
