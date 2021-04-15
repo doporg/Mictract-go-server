@@ -3,11 +3,15 @@ package response
 import "mictract/model"
 
 type Peer struct {
-	Name  	string `json:"name"`
+	Nickname  	string 	`json:"nickname"`
+	ID 			int 	`json:"id"`
 }
 
 func NewPeer(p model.CaUser) *Peer {
-	return &Peer{p.GetName()}
+	return &Peer{
+		Nickname: 	p.GetName(),
+		ID: 	 	p.ID,
+	}
 }
 
 func NewPeers(ps []model.CaUser) []Peer {

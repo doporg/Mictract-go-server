@@ -22,22 +22,22 @@ func NewNetwork(n *model.Network) *response.Network {
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
 	}
+	users, err := dao.FindCaUserInNetwork(n.ID)
+	if err != nil {
+		global.Logger.Error("", zap.Error(err))
+	}
 
 	ret := &response.Network{
-		NetworkID: n.ID,
-		Nickname: n.Nickname,
-		Consensus: n.Consensus,
-		TlsEnabled: n.TlsEnabled,
-		Status: n.Status,
-		CreateTime: strconv.FormatInt(n.CreatedAt.Unix(), 10),
-		Orderers: []string{},
-		Organizations: NewOrgs(orgs),
-		// TODO
-		Users: []response.User{},
-		Channels: NewChannels(chs),
-	}
-	for _, orderer := range orderers {
-		ret.Orderers = append(ret.Orderers, orderer.GetName())
+		ID: 			n.ID,
+		Nickname: 		n.Nickname,
+		Consensus: 		n.Consensus,
+		TlsEnabled: 	n.TlsEnabled,
+		Status: 		n.Status,
+		CreateTime: 	strconv.FormatInt(n.CreatedAt.Unix(), 10),
+		Orderers: 		response.NewOrderers(orderers),
+		Organizations: 	NewOrgs(orgs),
+		Users: 			response.NewUsers(users),
+		Channels: 		NewChannels(chs),
 	}
 	return ret
 }

@@ -164,7 +164,7 @@ func ListNetworks(c *gin.Context) {
 func DeleteNetwork(c *gin.Context) {
 	// id, err := strconv.Atoi(c.Param("id"))
 	req := struct {
-		NetworkID int `form:"networkID" json:"networkID" binding:"required"`
+		NetworkID int `form:"id" json:"id" binding:"required"`
 	}{}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

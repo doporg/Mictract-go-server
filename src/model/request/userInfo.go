@@ -8,5 +8,5 @@ type CreateUserReq struct {
 }
 
 type DeleteUserReq struct {
-	UserID 	int `form:"userID" json:"userID" binding:"required"`
+	UserID 	int `form:"id" json:"id" binding:"required"`
 }

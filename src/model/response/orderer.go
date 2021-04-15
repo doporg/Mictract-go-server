@@ -3,11 +3,15 @@ package response
 import "mictract/model"
 
 type Orderer struct {
-	Name    string `json:"name"`
+	Nickname    string 	`json:"nickname"`
+	ID 			int		`json:"id"`
 }
 
 func NewOrderer(o model.CaUser) *Orderer {
-	return &Orderer{o.GetName()}
+	return &Orderer{
+		Nickname: 	o.GetName(),
+		ID: 		o.ID,
+	}
 }
 
 func NewOrderers(os []model.CaUser) []Orderer {
