@@ -133,7 +133,7 @@ func (ns *NetworkService)Delete() error {
 
 	// 2. remove chaincode entity
 	global.Logger.Info("2. remove chaincode entity")
-	if ccs, err = dao.FindAllChaincodes(); err != nil {
+	if ccs, err = dao.FindAllChaincodesInNetwork(ns.net.ID); err != nil {
 		global.Logger.Error("", zap.Error(err))
 	}
 	for _, cc := range ccs {
@@ -402,26 +402,26 @@ func (ns *NetworkService) AddChannel(orgIDs []int, nickname string) (*model.Chan
 	*/
 	global.Logger.Info("7. Dynamically join remaining peer to the channel")
 	for i := 1; i < len(orgIDs); i++ {
-		global.Logger.Info(fmt.Sprintf(" update anchors(org%d)", orgIDs[i]))
-		if err := chSvc.UpdateAnchors(orgIDs[i]); err != nil {
-			return ch, err
-		}
+		global.Logger.Info("fuck fabric !!!")
+		time.Sleep(5 * time.Second)
 
 		peers, err := dao.FindAllPeersInOrganization(orgIDs[i])
 		if err != nil {
 			global.Logger.Error("", zap.Error(err))
-			continue
+			return ch, err
 		}
 		for _, peer := range peers {
-			go func(peer *model.CaUser){
-				global.Logger.Info(fmt.Sprintf("%s join channel", peer.GetName()))
-				time.Sleep(5 * time.Second)
-				if err := NewCaUserService(peer).JoinChannel(
+			global.Logger.Info(fmt.Sprintf("%s join channel", peer.GetName()))
+			if err := NewCaUserService(&peer).JoinChannel(
 					ch.ID,
 					orderers[0].GetName()); err != nil {
 					global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.GetName(), ch.ID), zap.Error(err))
-				}
-			}(&peer)
+				return ch, err
+			}
+		}
+		global.Logger.Info(fmt.Sprintf(" update anchors(org%d)", orgIDs[i]))
+		if err := chSvc.UpdateAnchors(orgIDs[i]); err != nil {
+			return ch, err
 		}
 	}
 

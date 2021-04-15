@@ -19,6 +19,9 @@ func FindChaincodeByID(ccID int) (*model.Chaincode, error) {
 	if err := global.DB.Where("id = ?", ccID).Find(&ccs).Error; err != nil {
 		return &model.Chaincode{}, err
 	}
+	if len(ccs) == 0 {
+		return &model.Chaincode{}, errors.New("no such chaincode")
+	}
 	return &ccs[0], nil
 }
 
