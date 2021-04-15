@@ -413,15 +413,15 @@ func (ns *NetworkService) AddChannel(orgIDs []int, nickname string) (*model.Chan
 			continue
 		}
 		for _, peer := range peers {
-			global.Logger.Info(fmt.Sprintf("%s join channel", peer.GetName()))
-			go func(){
+			go func(peer *model.CaUser){
+				global.Logger.Info(fmt.Sprintf("%s join channel", peer.GetName()))
 				time.Sleep(5 * time.Second)
-				if err := NewCaUserService(&peer).JoinChannel(
+				if err := NewCaUserService(peer).JoinChannel(
 					ch.ID,
 					orderers[0].GetName()); err != nil {
 					global.Logger.Error(fmt.Sprintf("%s fail to join channel%d", peer.GetName(), ch.ID), zap.Error(err))
 				}
-			}()
+			}(&peer)
 		}
 	}
 
