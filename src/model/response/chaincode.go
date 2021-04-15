@@ -7,7 +7,7 @@ import (
 type Chaincode struct {
 	Nickname	 	string 	`json:"nickname"`
 
-	ChaincodeID 	int 	`json:"chaincodeID"`
+	ChaincodeID 	int 	`json:"id"`
 	NetworkID 		int 	`json:"networkID"`
 	ChannelID 		int 	`json:"channelID"`
 
@@ -18,7 +18,7 @@ type Chaincode struct {
 	PolicyStr    	string	`json:"policy"`
 	Version  	 	string 	`json:"version"`
 	Sequence 	 	int64  	`json:"sequence"`
-	InitRequired 	bool 	`json:"init_required"`
+	InitRequired 	bool 	`json:"initRequired"`
 
 	PackageID	 	string	`json:"packageID"`
 }

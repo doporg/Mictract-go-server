@@ -1,7 +1,7 @@
 package response
 
 type Channel struct {
-	ChannelID 		int 		`json:"channelID"`
+	ChannelID 		int 		`json:"id"`
 	NetworkID		int 		`json:"networkID"`
 	Nickname 		string 		`json:"nickname"`
 	Organizations 	[]string 	`json:"organizations"`
