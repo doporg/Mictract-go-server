@@ -9,22 +9,18 @@ import (
 )
 
 func NewChannel(c *model.Channel) *response.Channel {
-	ret := &response.Channel{
-		ChannelID: 		c.ID,
-		Nickname: 		c.Nickname,
-		Organizations: 	[]string{},
-		NetworkID: 		c.NetworkID,
-		Status: 		c.Status,
-	}
-
 	orgs, err := dao.FindAllOrganizationsInChannel(c)
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
 	}
-	for _, org := range orgs {
-		ret.Organizations = append(ret.Organizations, org.GetName())
+
+	return &response.Channel{
+		ChannelID: 		c.ID,
+		Nickname: 		c.Nickname,
+		Organizations: 	NewOrgs(orgs),
+		NetworkID: 		c.NetworkID,
+		Status: 		c.Status,
 	}
-	return ret
 }
 
 func NewChannels(cs []model.Channel) []response.Channel {
