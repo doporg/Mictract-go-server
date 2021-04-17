@@ -162,13 +162,22 @@ func CreateChaincode(c *gin.Context)  {
 				return
 			}
 
-			if err := ccSvc.ApproveCC(
-				rc,
-				orderers[0].GetName(),
-				peers[0].GetName()); err != nil {
-				global.Logger.Error("fail to approve cc", zap.Error(err))
-				dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-				return
+			retry_count := 3
+			for retry_count >= 0 {
+				if err := ccSvc.ApproveCC(
+					rc,
+					orderers[0].GetName(),
+					peers[0].GetName()); err != nil {
+					global.Logger.Error("fail to approve cc", zap.Error(err))
+					if retry_count <= 0 {
+						dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
+						return
+					}
+					global.Logger.Info("Retrying")
+					retry_count --
+				} else {
+					break
+				}
 			}
 
 			resp, _ := ccSvc.CheckCCCommitReadiness(rc)
@@ -199,14 +208,23 @@ func CreateChaincode(c *gin.Context)  {
 			return
 		}
 
-		if err := ccSvc.CommitCC(
-			rc,
-			orderers[0].GetName(),
-			peerURLs...,
+		retry_count := 3
+		for retry_count >= 0 {
+			if err := ccSvc.CommitCC(
+				rc,
+				orderers[0].GetName(),
+				peerURLs...,
 			); err != nil {
-			global.Logger.Error("fail to commit cc", zap.Error(err))
-			dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
-			return
+				global.Logger.Error("fail to commit cc", zap.Error(err))
+				if retry_count == 0{
+					dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusError)
+					return
+				}
+				global.Logger.Error("Retrying")
+				retry_count --
+			} else {
+				break
+			}
 		}
 
 		// 7. start cc container
