@@ -20,7 +20,7 @@ func FindChaincodeByID(ccID int) (*model.Chaincode, error) {
 		return &model.Chaincode{}, err
 	}
 	if len(ccs) == 0 {
-		return &model.Chaincode{}, errors.New("no such chaincode")
+		return &model.Chaincode{}, errors.New(fmt.Sprintf("no such chaincode(id = %d)", ccID))
 	}
 	return &ccs[0], nil
 }

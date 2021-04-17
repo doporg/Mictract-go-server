@@ -62,9 +62,13 @@ func GetRouter() (router *gin.Engine) {
 	CCRouter := APIRoute.Group("chaincode")
 	{
 		CCRouter.POST("/", api.CreateChaincode)
-		CCRouter.PATCH("/peer", api.InstallChaincode)
-		CCRouter.POST("/:id", api.InvokeChaincode)
 		CCRouter.GET("/", api.ListChaincodes)
+
+		CCRouter.POST("/install", api.InstallChaincode)
+		CCRouter.POST("/approve", api.ApproveChaincode)
+		CCRouter.POST("/commit", api.CommitChaincode)
+		CCRouter.POST("/start", api.StartChaincodeEntity)
+		CCRouter.POST("/invoke", api.InvokeChaincode)
 	}
 	return
 }
