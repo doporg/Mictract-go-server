@@ -3,13 +3,11 @@ package api
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	channelclient "github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"go.uber.org/zap"
 	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
 	"mictract/model"
-	"mictract/model/request"
 	"mictract/model/response"
 	"mictract/service"
 	"mictract/service/factory"
@@ -509,84 +507,6 @@ func StartChaincodeEntity(c *gin.Context)  {
 
 	dao.UpdateChaincodeStatusByID(cc.ID, enum.StatusRunning)
 	response.Ok().Result(c.JSON)
-}
-
-// POST /api/chaincode/invoke
-func InvokeChaincode(c *gin.Context)  {
-	var info request.InvokeCCReq
-	if err := c.ShouldBindJSON(&info); err != nil {
-		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	cc, err := dao.FindChaincodeByID(info.ChaincodeID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	ccSvc := service.NewChaincodeService(cc)
-
-	if cc.Status != enum.StatusRunning {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage(fmt.Sprintf("the chaincode%d's status is %s", cc.ID, cc.Status)).
-			Result(c.JSON)
-		return
-	}
-
-	ch, err := dao.FindChannelByID(cc.ChannelID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	global.Logger.Info("Obtaining channel client...")
-	user, err := dao.FindCaUserByID(info.UserID)
-	//adminUser, err := dao.FindSystemUserInOrganization(orgs[0].ID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(user, ch)
-	if err != nil {
-		global.Logger.Error("fail to get channel client", zap.Error(err))
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	var ret channelclient.Response
-	switch info.InvokeType {
-	case "init":
-		ret, err = ccSvc.InitCC(chClient, info.Args, info.PeerURLs...)
-	case "query":
-		ret, err = ccSvc.QueryCC(chClient, info.Args, info.PeerURLs...)
-	case "execute":
-		ret, err = ccSvc.ExecuteCC(chClient, info.Args, info.PeerURLs...)
-	default:
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage("invokeType only supports init, execute, query").
-			Result(c.JSON)
-		return
-	}
-	if err != nil {
-		global.Logger.Error(err.Error())
-		response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	response.Ok().
-		SetPayload(ret).
-		Result(c.JSON)
 }
 
 // GET /api/chaincode

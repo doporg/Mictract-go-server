@@ -42,6 +42,7 @@ func createTables() {
 		model.CaUser{},
 		model.Chaincode{},
 		model.Certification{},
+		model.Transaction{},
 	)
 
 	if err != nil {

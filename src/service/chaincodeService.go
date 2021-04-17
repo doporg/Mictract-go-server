@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	cb "github.com/hyperledger/fabric-protos-go/common"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
 	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/retry"
 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/policydsl"
@@ -301,84 +300,6 @@ func packArgs(paras []string) [][]byte {
 		args = append(args, []byte(k))
 	}
 	return args
-}
-
-
-// shell批准时指定--init-required，或者sdk批准时指定 InitRequired = true，
-// 运行链码时都需要先初始化链码，用--isInit或者IsInit: true
-func (ccSvc *ChaincodeService)InitCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
-	if !ccSvc.cc.InitRequired {
-		return channel.Response{}, errors.New("This chaincode does not need init")
-	}
-	_args := [][]byte{}
-	if len(args) < 1{
-		return channel.Response{}, errors.New("check your args!")
-	} else if len(args) > 1 {
-		_args = packArgs(args[1:])
-	}
-	response, err := channelClient.Execute(
-		channel.Request{
-			ChaincodeID: ccSvc.cc.GetName(),
-			Fcn: args[0],
-			Args: _args,
-			IsInit: true},
-		channel.WithRetry(retry.DefaultChannelOpts),
-		channel.WithTargetEndpoints(peerURLs...),
-	)
-	if err != nil {
-		return response, errors.WithMessage(err, "fail to init chaincode")
-	}
-	return response, err
-}
-
-// If you do not specify peerURLs,
-// the program seems to automatically find peers that meet the policy to endorse.
-// If specified,
-// you must be responsible for satisfying the endorsement strategy
-func (ccSvc *ChaincodeService)ExecuteCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
-	_args := [][]byte{}
-	if len(args) < 1{
-		return channel.Response{}, errors.New("check your args!")
-	} else if len(args) > 1 {
-		_args = packArgs(args[1:])
-	}
-
-	response, err := channelClient.Execute(
-		channel.Request{
-			ChaincodeID: ccSvc.cc.GetName(),
-			Fcn: args[0],
-			Args: _args},
-		channel.WithRetry(retry.DefaultChannelOpts),
-		channel.WithTargetEndpoints(peerURLs...),
-	)
-	if err != nil {
-		return channel.Response{}, errors.WithMessage(err, "fail to execute chaincode！")
-	}
-
-	return response, err
-}
-
-// eg: QueryCC(cc, "mycc", []string{"Query", "a"}, "peer0.org1.example.com")
-func (ccSvc *ChaincodeService)QueryCC(channelClient *channel.Client, args []string, peerURLs ...string) (channel.Response, error) {
-	_args := [][]byte{}
-	if len(args) < 1{
-		return channel.Response{}, errors.New("check your args!")
-	} else if len(args) > 1 {
-		_args = packArgs(args[1:])
-	}
-
-	response, err := channelClient.Query(
-		channel.Request{
-			ChaincodeID: ccSvc.cc.GetName(),
-			Fcn: args[0],
-			Args: _args},
-		channel.WithRetry(retry.DefaultChannelOpts),
-		channel.WithTargetEndpoints(peerURLs...),
-	)
-	if err != nil {
-		return channel.Response{}, errors.WithMessage(err, "fail to execute qeury！")
-	}
-	return response, nil
 }
 
 func (ccSvc *ChaincodeService) Build() error {

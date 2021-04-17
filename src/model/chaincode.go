@@ -24,8 +24,11 @@ type Chaincode struct {
 	PackageID	 	string						`json:"package_id"`
 }
 
+func GetChaincodeNameByID(ccID int) string {
+	return fmt.Sprintf("chaincode%d", ccID)
+}
 func (c *Chaincode) GetName() string {
-	return fmt.Sprintf("chaincode%d", c.ID)
+	return GetChaincodeNameByID(c.ID)
 }
 
 func (c *Chaincode) GetAddress() string {

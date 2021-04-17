@@ -68,7 +68,15 @@ func GetRouter() (router *gin.Engine) {
 		CCRouter.POST("/approve", api.ApproveChaincode)
 		CCRouter.POST("/commit", api.CommitChaincode)
 		CCRouter.POST("/start", api.StartChaincodeEntity)
-		CCRouter.POST("/invoke", api.InvokeChaincode)
+		// CCRouter.POST("/invoke", api.InvokeChaincode)
+	}
+
+	TxRouter := APIRoute.Group("transaction")
+	{
+		TxRouter.POST("/", api.InvokeChaincode)
+		TxRouter.GET("/", api.ListTransaction)
+		TxRouter.GET("/:id", api.GetTransactionInBlockchain)
+		TxRouter.DELETE("/", api.DeleteTransaction)
 	}
 	return
 }
