@@ -14,6 +14,7 @@ import (
 	"mictract/service"
 	"mictract/service/factory"
 	"net/http"
+	"strconv"
 )
 
 // Create a new network configuration.
@@ -137,28 +138,28 @@ func ListNetworks(c *gin.Context) {
 	}
 }
 
-//// GET	/network/:id
-//func GetNetwork(c *gin.Context) {
-//	id, err := strconv.Atoi(c.Param("id"))
-//
-//	if err != nil {
-//		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-//			SetMessage(err.Error()).
-//			Result(c.JSON)
-//		return
-//	}
-//
-//	if net, err := model.FindNetworkByID(id); err != nil {
-//		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
-//			SetMessage(err.Error()).
-//			Result(c.JSON)
-//	} else {
-//
-//		response.Ok().
-//			SetPayload(response.NewNetwork(*net)).
-//			Result(c.JSON)
-//	}
-//}
+// GET	/network/:id
+func GetNetwork(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	if net, err := dao.FindNetworkByID(id); err != nil {
+		response.Err(http.StatusNotFound, enum.CodeErrBadArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+	} else {
+
+		response.Ok().
+			SetPayload(respFactory.NewNetwork(net)).
+			Result(c.JSON)
+	}
+}
 
 // DELETE	/network/
 func DeleteNetwork(c *gin.Context) {

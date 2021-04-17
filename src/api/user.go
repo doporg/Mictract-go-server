@@ -98,7 +98,24 @@ func CreateUser(c *gin.Context) {
 // GET /api/user
 // return all users
 func ListUsers(c *gin.Context) {
-	users, err := dao.FindAllCaUser()
+	info := struct {
+		NetworkID int `form:"networkID"`
+	}{}
+
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	var users []model.CaUser
+	var err   error
+	if info.NetworkID == 0 {
+		users, err = dao.FindAllCaUser()
+	} else {
+		users, err = dao.FindAllUserInNetwork(info.NetworkID)
+	}
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
@@ -111,7 +128,6 @@ func ListUsers(c *gin.Context) {
 }
 
 // DELETE /api/user
-// TODO: revoke user from ca
 func DeleteUser(c *gin.Context) {
 	var info request.DeleteUserReq
 	var user *model.CaUser

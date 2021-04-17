@@ -510,9 +510,26 @@ func StartChaincodeEntity(c *gin.Context)  {
 }
 
 // GET /api/chaincode
-// ChaincodeInstance
 func ListChaincodes(c *gin.Context) {
-	ccs, err := dao.FindAllChaincodes()
+	info := struct {
+		NetworkID int `form:"networkID"`
+	}{}
+
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	var ccs []model.Chaincode
+	var err error
+
+	if info.NetworkID == 0 {
+		ccs, err = dao.FindAllChaincodes()
+	} else {
+		ccs, err = dao.FindAllChaincodesInNetwork(info.NetworkID)
+	}
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).

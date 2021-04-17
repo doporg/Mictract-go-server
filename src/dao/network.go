@@ -84,6 +84,14 @@ func FindAllChaincodesInNetwork(netID int) ([]model.Chaincode, error) {
 	return ccs, nil
 }
 
+func FindAllUserInNetwork(netID int) ([]model.CaUser, error) {
+	ccs := []model.CaUser{}
+	if err := global.DB.Where("network_id = ? and type in ?", netID, []string{"user", "admin"}).Find(&ccs).Error; err != nil {
+		return []model.CaUser{}, err
+	}
+	return ccs, nil
+}
+
 func UpdateNetworkStatusByID(id int, status string) error {
 	return global.DB.Model(&model.Network{}).Where("id = ?", id).Update("status", status).Error
 }

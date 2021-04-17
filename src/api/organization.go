@@ -79,27 +79,21 @@ func ListOrganizations(c *gin.Context) {
 		return
 	}
 
+	var orgs []model.Organization
+	var err  error
+
 	if info.NetworkID == 0 {
-		orgs, err := dao.FindAllOrganizations()
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-		}
-		response.Ok().
-			SetPayload(respFactory.NewOrgs(orgs)).
-			Result(c.JSON)
-
+		orgs, err = dao.FindAllOrganizations()
 	} else {
-		orgs, err := dao.FindAllOrganizationsInNetwork(info.NetworkID)
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-		}
-
-		response.Ok().
-			SetPayload(respFactory.NewOrgs(orgs)).
+		orgs, err = dao.FindAllOrganizationsInNetwork(info.NetworkID)
+	}
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
 			Result(c.JSON)
 	}
+
+	response.Ok().
+		SetPayload(respFactory.NewOrgs(orgs)).
+		Result(c.JSON)
 }

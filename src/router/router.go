@@ -15,6 +15,7 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.POST("/", api.CreateNetwork)
 		NetworkRouter.GET("/", api.ListNetworks)
 		NetworkRouter.DELETE("/", api.DeleteNetwork)
+		NetworkRouter.GET("/:id", api.GetNetwork)
 	}
 
 	ChannelRouter := APIRoute.Group("channel")

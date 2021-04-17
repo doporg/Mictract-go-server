@@ -52,8 +52,6 @@ func AddChannel(c *gin.Context) {
 }
 
 // GET /api/channel
-
-// Note: All channel
 func GetChannelInfo(c *gin.Context) {
 	info := struct {
 		NetworkID int `form:"networkID" json:"networkID"`
@@ -66,39 +64,21 @@ func GetChannelInfo(c *gin.Context) {
 		return
 	}
 
+	var chs []model.Channel
+	var err error
 	if info.NetworkID != 0 {
-		chs, err := dao.FindAllChannelsInNetwork(info.NetworkID)
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
-		}
-
-		response.Ok().
-			SetPayload(respFactory.NewChannels(chs)).
-			Result(c.JSON)
+		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
 	} else {
-		ret := []model.Channel{}
-		nets, err := dao.FindAllNetworks()
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-		}
-
-		for _, net := range nets {
-			chs, err := dao.FindAllChannelsInNetwork(net.ID)
-			if err != nil {
-				response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-					SetMessage(err.Error()).
-					Result(c.JSON)
-			}
-			ret = append(ret, chs...)
-		}
-
-		response.Ok().
-			SetPayload(respFactory.NewChannels(ret)).
-			Result(c.JSON)
+		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
 	}
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(respFactory.NewChannels(chs)).
+		Result(c.JSON)
 }
