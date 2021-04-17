@@ -9,22 +9,10 @@ import (
 )
 
 func NewOrg(o *model.Organization) *response.Organization {
-	ret := &response.Organization{
-		OrganizationID: o.ID,
-		Peers: 			[]string{},
-		Users: 			[]string{},
-		NetworkID: 		o.NetworkID,
-		Status: 		o.Status,
-		Nickname: 		o.Nickname,
-	}
-
 	// peers
 	peers, err := dao.FindAllPeersInOrganization(o.ID)
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
-	}
-	for _, peer := range peers {
-		ret.Peers = append(ret.Peers, peer.GetName())
 	}
 
 	// users
@@ -32,11 +20,15 @@ func NewOrg(o *model.Organization) *response.Organization {
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
 	}
-	for _, user := range users {
-		ret.Users = append(ret.Users, user.GetName())
-	}
 
-	return ret
+	return &response.Organization{
+		OrganizationID: o.ID,
+		Peers: 			response.NewPeers(peers),
+		Users: 			response.NewUsers(users),
+		NetworkID: 		o.NetworkID,
+		Status: 		o.Status,
+		Nickname: 		o.Nickname,
+	}
 }
 
 func NewOrgs(os []model.Organization) []response.Organization {
