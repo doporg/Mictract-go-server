@@ -12,7 +12,7 @@ type User struct {
 	NetworkID		int		`json:"networkID"`
 }
 
-func NewUser(u model.CaUser) *User {
+func NewUser(u *model.CaUser) *User {
 	return &User{
 		UserID: u.ID,
 		Role: u.Type,
@@ -28,7 +28,7 @@ func NewUsers(us []model.CaUser) []User {
 		if u.Nickname == "system-user" {
 			continue
 		}
-		usersResp = append(usersResp, *NewUser(u))
+		usersResp = append(usersResp, *NewUser(&u))
 	}
 	return usersResp
 }

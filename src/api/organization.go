@@ -12,6 +12,7 @@ import (
 	respFactory "mictract/service/factory/response"
 	"mictract/service"
 	"net/http"
+	"strconv"
 )
 
 // POST /organization
@@ -95,5 +96,28 @@ func ListOrganizations(c *gin.Context) {
 
 	response.Ok().
 		SetPayload(respFactory.NewOrgs(orgs)).
+		Result(c.JSON)
+}
+
+// GET /api/organization/:id
+func GetOrganizationByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	org, err := dao.FindOrganizationByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(respFactory.NewOrg(org)).
 		Result(c.JSON)
 }

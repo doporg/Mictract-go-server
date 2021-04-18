@@ -7,7 +7,7 @@ type Orderer struct {
 	ID 			int		`json:"id"`
 }
 
-func NewOrderer(o model.CaUser) *Orderer {
+func NewOrderer(o *model.CaUser) *Orderer {
 	return &Orderer{
 		Nickname: 	o.GetName(),
 		ID: 		o.ID,
@@ -17,7 +17,7 @@ func NewOrderer(o model.CaUser) *Orderer {
 func NewOrderers(os []model.CaUser) []Orderer {
 	orderers := []Orderer{}
 	for _, o := range os {
-		orderers = append(orderers, *NewOrderer(o))
+		orderers = append(orderers, *NewOrderer(&o))
 	}
 	return orderers
 }

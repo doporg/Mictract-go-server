@@ -12,6 +12,7 @@ import (
 	"mictract/service/factory"
 	"mictract/service/factory/sdk"
 	"net/http"
+	"strconv"
 )
 
 // POST /api/user
@@ -91,7 +92,7 @@ func CreateUser(c *gin.Context) {
 	}
 
 	response.Ok().
-		SetPayload(response.NewUser(*user)).
+		SetPayload(response.NewUser(user)).
 		Result(c.JSON)
 }
 
@@ -124,6 +125,29 @@ func ListUsers(c *gin.Context) {
 
 	response.Ok().
 		SetPayload(response.NewUsers(users)).
+		Result(c.JSON)
+}
+
+// GET /api/orderer
+func GetUserByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	user, err := dao.FindCaUserByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewUser(user)).
 		Result(c.JSON)
 }
 

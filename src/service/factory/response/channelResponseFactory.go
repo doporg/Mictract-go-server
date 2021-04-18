@@ -9,6 +9,18 @@ import (
 )
 
 func NewChannel(c *model.Channel) *response.Channel {
+	return NewChannelWithHeight(c, 0)
+}
+
+func NewChannels(cs []model.Channel) []response.Channel {
+	ret := []response.Channel{}
+	for _, c := range cs {
+		ret = append(ret, *NewChannel(&c))
+	}
+	return ret
+}
+
+func NewChannelWithHeight(c *model.Channel, height uint64) *response.Channel {
 	orgs, err := dao.FindAllOrganizationsInChannel(c)
 	if err != nil {
 		global.Logger.Error("", zap.Error(err))
@@ -20,13 +32,6 @@ func NewChannel(c *model.Channel) *response.Channel {
 		Organizations: 	NewOrgs(orgs),
 		NetworkID: 		c.NetworkID,
 		Status: 		c.Status,
+		Height: 		height,
 	}
-}
-
-func NewChannels(cs []model.Channel) []response.Channel {
-	ret := []response.Channel{}
-	for _, c := range cs {
-		ret = append(ret, *NewChannel(&c))
-	}
-	return ret
 }

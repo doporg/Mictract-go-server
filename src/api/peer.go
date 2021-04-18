@@ -9,6 +9,7 @@ import (
 	"mictract/service"
 	"mictract/service/factory"
 	"net/http"
+	"strconv"
 )
 
 // POST /api/peer
@@ -65,6 +66,29 @@ func ListPeersByOrganization(c *gin.Context) {
 
 	response.Ok().
 		SetPayload(response.NewPeers(peers)).
+		Result(c.JSON)
+}
+
+// GET /api/orderer
+func GetPeerByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	peer, err := dao.FindCaUserByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewPeer(peer)).
 		Result(c.JSON)
 }
 

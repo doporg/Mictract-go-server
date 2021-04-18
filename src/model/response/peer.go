@@ -7,7 +7,7 @@ type Peer struct {
 	ID 			int 	`json:"id"`
 }
 
-func NewPeer(p model.CaUser) *Peer {
+func NewPeer(p *model.CaUser) *Peer {
 	return &Peer{
 		Nickname: 	p.GetName(),
 		ID: 	 	p.ID,
@@ -17,7 +17,7 @@ func NewPeer(p model.CaUser) *Peer {
 func NewPeers(ps []model.CaUser) []Peer {
 	peers := []Peer{}
 	for _, p := range ps {
-		peers = append(peers, *NewPeer(p))
+		peers = append(peers, *NewPeer(&p))
 	}
 	return peers
 }

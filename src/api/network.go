@@ -139,7 +139,7 @@ func ListNetworks(c *gin.Context) {
 }
 
 // GET	/network/:id
-func GetNetwork(c *gin.Context) {
+func GetNetworkByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 
 	if err != nil {

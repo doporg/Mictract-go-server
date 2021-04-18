@@ -15,25 +15,28 @@ func GetRouter() (router *gin.Engine) {
 		NetworkRouter.POST("/", api.CreateNetwork)
 		NetworkRouter.GET("/", api.ListNetworks)
 		NetworkRouter.DELETE("/", api.DeleteNetwork)
-		NetworkRouter.GET("/:id", api.GetNetwork)
+		NetworkRouter.GET("/:id", api.GetNetworkByID)
 	}
 
 	ChannelRouter := APIRoute.Group("channel")
 	{
 		ChannelRouter.POST("/", api.AddChannel)
-		ChannelRouter.GET("/", api.GetChannelInfo)
+		ChannelRouter.GET("/", api.ListChannels)
+		ChannelRouter.GET("/:id", api.GetChannelByID)
 	}
 
 	OrganizationRouter := APIRoute.Group("organization")
 	{
 		OrganizationRouter.POST("/", api.AddOrg)
 		OrganizationRouter.GET("/", api.ListOrganizations)
+		OrganizationRouter.GET("/:id", api.GetOrganizationByID)
 	}
 
 	UserRouter := APIRoute.Group("user")
 	{
 		UserRouter.POST("/", api.CreateUser)
 		UserRouter.GET("/", api.ListUsers)
+		UserRouter.GET("/:id", api.GetUserByID)
 		UserRouter.DELETE("/", api.DeleteUser)
 	}
 
@@ -41,6 +44,7 @@ func GetRouter() (router *gin.Engine) {
 	{
 		PeerRouter.POST("/", api.AddPeer)
 		PeerRouter.GET("/", api.ListPeersByOrganization)
+		PeerRouter.GET("/:id", api.GetPeerByID)
 
 		PeerChannelRouter := PeerRouter.Group("channel")
 		{
@@ -53,6 +57,7 @@ func GetRouter() (router *gin.Engine) {
 	{
 		OrdererRouter.POST("/", api.AddOrderer)
 		OrdererRouter.GET("/", api.ListOrderersByNetwork)
+		OrdererRouter.GET("/:id", api.GetOrdererByID)
 	}
 
 	BlockRouter := APIRoute.Group("block")

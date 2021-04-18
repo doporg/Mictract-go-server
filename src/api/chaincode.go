@@ -541,3 +541,26 @@ func ListChaincodes(c *gin.Context) {
 		SetPayload(response.NewChaincodes(ccs)).
 		Result(c.JSON)
 }
+
+// GET /api/orderer
+func GetChaincodeByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	cc, err := dao.FindChaincodeByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewChaincode(cc)).
+		Result(c.JSON)
+}

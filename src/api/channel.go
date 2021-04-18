@@ -12,6 +12,7 @@ import (
 	respFactory "mictract/service/factory/response"
 	"mictract/service"
 	"net/http"
+	"strconv"
 )
 
 // POST /api/channel
@@ -52,7 +53,7 @@ func AddChannel(c *gin.Context) {
 }
 
 // GET /api/channel
-func GetChannelInfo(c *gin.Context) {
+func ListChannels(c *gin.Context) {
 	info := struct {
 		NetworkID int `form:"networkID" json:"networkID"`
 	}{}
@@ -81,4 +82,37 @@ func GetChannelInfo(c *gin.Context) {
 	response.Ok().
 		SetPayload(respFactory.NewChannels(chs)).
 		Result(c.JSON)
+}
+
+// GET /api/channel/:id
+func GetChannelByID(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	ch, err := dao.FindChannelByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	bcInfoResp, err := service.NewChannelService(ch).GetChannelInfo()
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+
+	}
+
+	response.Ok().
+		SetPayload(respFactory.NewChannelWithHeight(ch, bcInfoResp.BCI.Height)).
+		Result(c.JSON)
+
 }

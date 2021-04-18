@@ -8,6 +8,7 @@ import (
 	"mictract/model/response"
 	"mictract/service"
 	"net/http"
+	"strconv"
 )
 
 // POST /orderer/
@@ -65,5 +66,28 @@ func ListOrderersByNetwork(c *gin.Context) {
 
 	response.Ok().
 		SetPayload(response.NewOrderers(orderers)).
+		Result(c.JSON)
+}
+
+// GET /api/orderer
+func GetOrdererByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	orderer, err := dao.FindCaUserByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(response.NewOrderer(orderer)).
 		Result(c.JSON)
 }
