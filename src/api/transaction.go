@@ -196,20 +196,11 @@ func DeleteTransaction(c *gin.Context)  {
 		return
 	}
 
-	if len(info.IDs) == 0 {
-		if err := dao.DeleteAllTransaction(); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
-		}
-	} else {
-		if err := dao.DeleteTransaction(info.IDs); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
-		}
+	if err := dao.DeleteTransaction(info.IDs); err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
 	}
 	response.Ok().Result(c.JSON)
 }
