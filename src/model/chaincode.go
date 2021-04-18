@@ -33,9 +33,8 @@ func (c *Chaincode) GetName() string {
 
 func (c *Chaincode) GetAddress() string {
 	return fmt.Sprintf(
-		"%s-%s-channel%d-net%d:9999",
-		c.Label,
-		c.GetName(),
+		"cc%d-chan%d-net%d:9999",
+		c.ID,
 		c.ChannelID,
 		c.NetworkID)
 }
