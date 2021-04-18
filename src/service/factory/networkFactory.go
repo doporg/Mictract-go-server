@@ -27,6 +27,7 @@ func (nf *NetworkFactory)NewNetwork(nickname, consensus string) (*model.Network,
 		CreatedAt: 	time.Now(),
 		Status: 	enum.StatusStarting,
 		Consensus: 	consensus,
+		TlsEnabled: true,
 	}
 
 	// 3. insert into db
