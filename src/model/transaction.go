@@ -9,16 +9,16 @@ import (
 // txID 查询执行成功后设置
 type Transaction struct {
 	ID			uint64		`json:"id"`
-	TxID		string 		`json:"tx_id"`
+	TxID		string 		`json:"txID"`
 	Status  	string 		`json:"status"`
 	Message 	string 		`json:"message"`
 
-	UserID  	int 		`json:"user_id"`
-	ChaincodeID int 		`json:"chaincode_id"`
-	PeerURLs	mystring	`json:"peer_urls"`
+	UserID  	int 		`json:"userID"`
+	ChaincodeID int 		`json:"chaincodeID"`
+	PeerURLs	mystring	`json:"peerURLs"`
 	Args 		mystring 	`json:"args"`
 	// init query execute
-	InvokeType	string 		`json:"invoke_type"`
+	InvokeType	string 		`json:"invokeType"`
 }
 
 // gorm need
