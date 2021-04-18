@@ -46,11 +46,11 @@ func GetRouter() (router *gin.Engine) {
 		PeerRouter.GET("/", api.ListPeersByOrganization)
 		PeerRouter.GET("/:id", api.GetPeerByID)
 
-		PeerChannelRouter := PeerRouter.Group("channel")
-		{
-			PeerChannelRouter.POST("/", api.JoinPeerToChannel)
-			PeerChannelRouter.GET("/", api.ListChannelsInPeer)
-		}
+		//PeerChannelRouter := PeerRouter.Group("channel")
+		//{
+		//	PeerChannelRouter.POST("/", api.JoinPeerToChannel)
+		//	PeerChannelRouter.GET("/", api.ListChannelsInPeer)
+		//}
 	}
 
 	OrdererRouter := APIRoute.Group("orderer")
@@ -75,14 +75,15 @@ func GetRouter() (router *gin.Engine) {
 		CCRouter.POST("/commit", api.CommitChaincode)
 		CCRouter.POST("/start", api.StartChaincodeEntity)
 		// CCRouter.POST("/invoke", api.InvokeChaincode)
+
+		TxRouter := CCRouter.Group("transaction")
+		{
+			TxRouter.POST("/", api.InvokeChaincode)
+			TxRouter.GET("/", api.ListTransaction)
+			TxRouter.GET("/:id", api.GetTransactionInBlockchain)
+			TxRouter.DELETE("/", api.DeleteTransaction)
+		}
 	}
 
-	TxRouter := APIRoute.Group("transaction")
-	{
-		TxRouter.POST("/", api.InvokeChaincode)
-		TxRouter.GET("/", api.ListTransaction)
-		TxRouter.GET("/:id", api.GetTransactionInBlockchain)
-		TxRouter.DELETE("/", api.DeleteTransaction)
-	}
 	return
 }

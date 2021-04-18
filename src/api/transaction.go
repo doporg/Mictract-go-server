@@ -40,46 +40,6 @@ func InvokeChaincode(c *gin.Context)  {
 		return
 	}
 
-	cc, err := dao.FindChaincodeByID(info.ChaincodeID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	if cc.Status != enum.StatusRunning {
-		response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
-			SetMessage(fmt.Sprintf("the chaincode%d's status is %s", cc.ID, cc.Status)).
-			Result(c.JSON)
-		return
-	}
-
-	ch, err := dao.FindChannelByID(cc.ChannelID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
-	global.Logger.Info("Obtaining channel client...")
-	user, err := dao.FindCaUserByID(info.UserID)
-	if err != nil {
-		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-	chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(user, ch)
-	if err != nil {
-		global.Logger.Error("fail to get channel client", zap.Error(err))
-		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-			SetMessage(err.Error()).
-			Result(c.JSON)
-		return
-	}
-
 	tx, err := factory.NewTransationFactory().
 		NewTransation(info.UserID, info.ChaincodeID, info.PeerURLs, info.Args, info.InvokeType)
 	if err != nil {
@@ -90,8 +50,58 @@ func InvokeChaincode(c *gin.Context)  {
 		return
 	}
 
-	go func(tx model.Transaction) {
+	go func(info request.InvokeCCReq, tx model.Transaction) {
 		txSvc := service.NewTransactionService(&tx)
+
+		cc, err := dao.FindChaincodeByID(info.ChaincodeID)
+		if err != nil {
+			dao.UpdateTransactionStatusAndMessageByID(
+				tx.ID,
+				enum.StatusError,
+				"fail to get cc",
+			)
+			return
+		}
+
+		if cc.Status != enum.StatusRunning {
+			dao.UpdateTransactionStatusAndMessageByID(
+				tx.ID,
+				enum.StatusError,
+				fmt.Sprintf("the chaincode%d's status is %s", cc.ID, cc.Status),
+			)
+			return
+		}
+
+		ch, err := dao.FindChannelByID(cc.ChannelID)
+		if err != nil {
+			dao.UpdateTransactionStatusAndMessageByID(
+				tx.ID,
+				enum.StatusError,
+				"fail to get ch",
+			)
+			return
+		}
+
+		global.Logger.Info("Obtaining channel client...")
+		user, err := dao.FindCaUserByID(info.UserID)
+		if err != nil {
+			dao.UpdateTransactionStatusAndMessageByID(
+				tx.ID,
+				enum.StatusError,
+				"fail to get user",
+			)
+			return
+		}
+		chClient, err := sdk.NewSDKClientFactory().NewChannelClientIncludeNetwork(user, ch)
+		if err != nil {
+			dao.UpdateTransactionStatusAndMessageByID(
+				tx.ID,
+				enum.StatusError,
+				"fail to get chClient",
+			)
+			return
+		}
+
 		var resp channel.Response
 		switch info.InvokeType {
 		case "init":
@@ -121,7 +131,7 @@ func InvokeChaincode(c *gin.Context)  {
 		}
 		dao.UpdateTransactionStatusAndMessageByID(tx.ID, enum.StatusSuccess, "well done")
 
-	}(*tx)
+	}(info, *tx)
 
 	response.Ok().Result(c.JSON)
 }
