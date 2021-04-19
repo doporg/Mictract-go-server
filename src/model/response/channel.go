@@ -1,34 +1,12 @@
 package response
 
-import (
-	"fmt"
-	"mictract/model"
-)
-
 type Channel struct {
-	Name 			string 		`json:"name"`
-	Organizations 	[]string 	`json:"organizations"`
-	Network			string 		`json:"network"`
-	Status 			string 		`json:"status"`
-}
+	ChannelID 		int 			`json:"id"`
+	NetworkID		int 			`json:"networkID"`
+	Nickname 		string 			`json:"nickname"`
+	Organizations 	[]Organization 	`json:"organizations"`
+	Status 			string 			`json:"status"`
 
-func NewChannel(c model.Channel) Channel {
-	ret := Channel{
-		Name: fmt.Sprintf("channel%d", c.ID),
-		Organizations: []string{},
-		Network: fmt.Sprintf("net%d.com", c.NetworkID),
-		Status: c.Status,
-	}
-	for _, org := range c.Organizations {
-		ret.Organizations = append(ret.Organizations, fmt.Sprintf("org%d.net%d.com", org.ID, org.NetworkID))
-	}
-	return ret
-}
-
-func NewChannels(cs []model.Channel) []Channel {
-	ret := []Channel{}
-	for _, c := range cs {
-		ret = append(ret, NewChannel(c))
-	}
-	return ret
+	// only set when call api /api/channel/:id
+	Height 			uint64			`json:"height"`
 }

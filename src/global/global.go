@@ -1,6 +1,7 @@
 package global
 
 import (
+	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -9,6 +10,7 @@ import (
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	"sync"
 )
 
 var (
@@ -16,11 +18,13 @@ var (
 	DB					*gorm.DB
 	Logger				*zap.Logger
 	SDKs				map[string]*fabsdk.FabricSDK
-	Nets				map[string]interface{}
+	AdminSigns			map[string]*msp.SigningIdentity
 	K8sClientset		*kubernetes.Clientset
 	K8sRestConfig		*rest.Config
 	K8sInformer			cache.SharedIndexInformer
 	K8sLister			v1.PodNamespaceLister
+
+	ChannelLock			sync.Mutex
 )
 
 var (

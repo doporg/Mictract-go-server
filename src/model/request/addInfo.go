@@ -6,35 +6,33 @@ package request
 //	Consensus	string `json:"consensus" binding:"required"`
 //}
 type AddNetworkReq struct {
+	Nickname    string `form:"nickname" json:"nickname" binding:"required"`
 	Consensus	string `form:"consensus" json:"consensus" binding:"required"`
 	OrdererCount int 	`form:"ordererCount" form:"ordererCount" binding:"required"`
 	PeerCounts	[]int	`form:"peerCounts" json:"peerCounts" binding:"required"`
+	OrgNicknames []string `form:"organizationNicknames" json:"organizationNicknames" binding:"required"`
 	TlsEnabled	bool	`form:"tlsEnalbed"`
 }
 
 type AddOrgReq struct {
-	NetworkUrl string `form:"networkUrl" json:"networkUrl" binding:"required"`
-	PeerCount int `form:"peerCount" json:"peerCount" binding:"required"`
+	NetworkID 	int 	`form:"networkID" json:"networkID" binding:"required"`
+	PeerCount 	int 	`form:"peerCount" json:"peerCount" binding:"required"`
+	Nickname   	string 	`form:"nickname" json:"nickname" binding:"required"`
 }
 
 type AddOrdererReq struct {
-	NetID	int	`form:"netid" binding:"required"`
-	Num     int `form:"num" binding:"required"`
+	NetworkID 	 		int 		`form:"networkID" json:"networkID" binding:"required"`
+	OrdererCount 	 	int 		`form:"ordererCount" json:"ordererCount" binding:"required"`
 }
 
 type AddPeerReq struct {
-	NetID	int `form:"netid" binding:"required"`
-	OrgID	int `form:"orgid" binding:"required"`
-	Num 	int `form:"num" binding:"required"`
+	OrganizationID int		`form:"organizationID" json:"organizationID" binding:"required"`
+	PeerCount 	   int 		`form:"peerCount" json:"peerCount" binding:"required"`
 }
 
-//type AddChannelReq struct {
-//	NetID 	int 	`form:"netid" binding:"required"`
-//	OrgIDs	[]int	`form:"orgids" binding:"required"`
-//}
-
 type AddChannelReq struct {
-	NetworkName		string `form:"network" json:"network" binding:"required"`
-	Organizations	[]string `form:"organizations" json:"organizations" binding:"required"`
+	Nickname        string 		`form:"nickname" json:"nickname"  binding:"required"`
+	NetworkID		int		 	`form:"networkID" json:"networkID" binding:"required"`
+	OrganizationIDs	[]int	 	`form:"organizationIDs" json:"organizationIDs" binding:"required"`
 }
 

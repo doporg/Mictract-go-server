@@ -3,6 +3,7 @@ module mictract
 go 1.15
 
 require (
+	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/fvbock/endless v0.0.0-20170109170031-447134032cb6
 	github.com/gin-gonic/gin v1.6.3
 	github.com/golang/protobuf v1.4.3
@@ -11,6 +12,7 @@ require (
 	github.com/imdario/mergo v0.3.11 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
+	github.com/swaggo/swag v1.7.0
 	go.uber.org/zap v1.16.0
 	golang.org/x/time v0.0.0-20201208040808-7e3f01d25324 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c

@@ -3,12 +3,16 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	respFactory "mictract/service/factory/response"
+	"mictract/service"
 	"net/http"
+	"strconv"
 )
 
 // POST /organization
@@ -28,67 +32,45 @@ func AddOrg(c *gin.Context) {
 		return
 	}
 
-	netID := model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID
-	net, err := model.GetNetworkfromNets(netID)
+	net, err := dao.FindNetworkByID(info.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
 			SetMessage(err.Error()).
 			Result(c.JSON)
 		return
 	}
-
-	newOrgID := len(net.Organizations)
+	netSvc := service.NewNetworkService(net)
 
 	go func(){
-		orgID := len(net.Organizations)
-		if err := net.AddOrg(); err != nil {
-			n, _ := model.GetNetworkfromNets(net.ID)
-			if newOrgID < len(n.Organizations) {
-				n.Organizations[newOrgID].Status = "error"
-			}
-			model.UpdateNets(*n)
+		var newOrg *model.Organization
+		if newOrg, err = netSvc.AddOrg(info.Nickname); err != nil {
 			global.Logger.Error("fail to add org", zap.Error(err))
+			dao.UpdateOrganizationStatusByID(newOrg.ID, enum.StatusError)
 			return
 		}
+		orgSvc := service.NewOrganizationService(newOrg)
 
 		// add rest peer
-		org, err := model.GetOrgFromNets(orgID, netID)
-		if err != nil {
-			n, _ := model.GetNetworkfromNets(net.ID)
-			if newOrgID < len(n.Organizations) {
-				n.Organizations[newOrgID].Status = "error"
-			}
-			model.UpdateNets(*n)
-			global.Logger.Error("fail to get org from Nets", zap.Error(err))
-			return
-		}
 		for i := 1; i < info.PeerCount; i++ {
-			if err := org.AddPeer(); err != nil {
-				n, _ := model.GetNetworkfromNets(net.ID)
-				if newOrgID < len(n.Organizations) {
-					n.Organizations[newOrgID].Status = "error"
-				}
-				model.UpdateNets(*n)
+			if _, err := orgSvc.AddPeer(); err != nil {
 				global.Logger.Error("fail to add rest peer", zap.Error(err))
+				dao.UpdateOrganizationStatusByID(newOrg.ID, enum.StatusError)
 				return
 			}
 		}
-		n, _ := model.GetNetworkfromNets(net.ID)
-		n.Organizations[newOrgID].Status = "running"
-		model.UpdateNets(*n)
+		dao.UpdateOrganizationStatusByID(newOrg.ID, enum.StatusRunning)
+		global.Logger.Info("org has been created successfully!", zap.String("orgName", newOrg.GetName()))
 		return
 	}()
 
-
 	response.Ok().
 		Result(c.JSON)
-
 }
 
 // GET /api/organization
 func ListOrganizations(c *gin.Context) {
 	info := struct {
-		NetworkUrl string `form:"networkUrl"`
+		NetworkID int `form:"networkID"`
 	}{}
 
 	if err := c.ShouldBindQuery(&info); err != nil {
@@ -98,40 +80,44 @@ func ListOrganizations(c *gin.Context) {
 		return
 	}
 
-	if info.NetworkUrl == "" {
-		nets, err := model.QueryAllNetwork()
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrDB).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-		}
-		orgs := []response.Organization{}
-		for _, net := range nets {
-			if len(net.Organizations) >= 2 {
-				orgs = response.NewOrgs(net.Organizations[1:])
-			}
-		}
-		response.Ok().
-			SetPayload(orgs).
-			Result(c.JSON)
+	var orgs []model.Organization
+	var err  error
 
+	if info.NetworkID == 0 {
+		orgs, err = dao.FindAllOrganizations()
 	} else {
-		net, err := model.GetNetworkfromNets(
-			model.NewCaUserFromDomainName(info.NetworkUrl).NetworkID)
-		if err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-			return
-		}
-
-		orgs := []response.Organization{}
-		if len(net.Organizations) >= 2 {
-			orgs = response.NewOrgs(net.Organizations[1:])
-		}
-
-		response.Ok().
-			SetPayload(orgs).
+		orgs, err = dao.FindAllOrganizationsInNetwork(info.NetworkID)
+	}
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
 			Result(c.JSON)
 	}
+
+	response.Ok().
+		SetPayload(respFactory.NewOrgs(orgs)).
+		Result(c.JSON)
+}
+
+// GET /api/organization/:id
+func GetOrganizationByID(c *gin.Context)  {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	org, err := dao.FindOrganizationByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	response.Ok().
+		SetPayload(respFactory.NewOrg(org)).
+		Result(c.JSON)
 }

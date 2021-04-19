@@ -12,7 +12,6 @@ import (
 	"mictract/global"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 type Chaincode struct {
@@ -33,10 +32,8 @@ func NewChaincode(netID int, channelID int, packageID string, chaincodeID int) *
 }
 
 func (cc *Chaincode) GetName() string {
-	s := strings.Split(cc.PackageID, ":")
 	return fmt.Sprintf(
-		"%s-chaincode%d-channel%d-net%d",
-		s[0],
+		"cc%d-chan%d-net%d",
 		cc.ChaincodeID,
 		cc.ChannelID,
 		cc.NetworkID)

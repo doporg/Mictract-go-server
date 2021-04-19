@@ -1,21 +1,27 @@
 package api
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"mictract/dao"
 	"mictract/enum"
 	"mictract/global"
 	"mictract/model"
 	"mictract/model/request"
 	"mictract/model/response"
+	respFactory "mictract/service/factory/response"
+	"mictract/service"
 	"net/http"
+	"strconv"
 )
 
 // POST /api/channel
 // param: AddChannelReq
 func AddChannel(c *gin.Context) {
 	var info request.AddChannelReq
+	var net *model.Network
+	var err error
+
 	if err := c.ShouldBindJSON(&info); err != nil {
 		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
 			SetMessage(err.Error()).
@@ -23,20 +29,7 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	netID := model.NewCaUserFromDomainName(info.NetworkName).NetworkID
-	orgIDs := []int{}
-	for _, orgName := range info.Organizations {
-		orgUser := model.NewCaUserFromDomainName(orgName)
-		if orgUser.NetworkID != netID {
-			response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
-				SetMessage(fmt.Sprintf("The %s is not in the %s", orgName, info.NetworkName)).
-				Result(c.JSON)
-			return
-		}
-		orgIDs = append(orgIDs, orgUser.OrganizationID)
-	}
-
-	net, err := model.GetNetworkfromNets(netID)
+	net, err = dao.FindNetworkByID(info.NetworkID)
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrBadArgument).
 			SetMessage(err.Error()).
@@ -44,21 +37,15 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
-	newChID := len(net.Channels) + 1
-
 	go func() {
-		if err := net.AddChannel(orgIDs); err != nil {
-			n, _ := model.GetNetworkfromNets(netID)
-			if newChID <= len(n.Channels) {
-				n.Channels[newChID - 1].Status = "error"
-			}
-			model.UpdateNets(*n)
+		var ch *model.Channel
+		if ch, err = service.NewNetworkService(net).AddChannel(info.OrganizationIDs, info.Nickname); err != nil {
+			dao.UpdateChannelStatusByID(ch.ID, enum.StatusError)
 			global.Logger.Error("fail to add channel", zap.Error(err))
 			return
 		}
-		n, _ := model.GetNetworkfromNets(netID)
-		n.Channels[newChID - 1].Status = "running"
-		model.UpdateNets(*n)
+		dao.UpdateChannelStatusByID(ch.ID, enum.StatusRunning)
+		global.Logger.Info("channel has been created successfully", zap.String("channelName", ch.GetName()))
 	}()
 
 	response.Ok().
@@ -66,28 +53,66 @@ func AddChannel(c *gin.Context) {
 }
 
 // GET /api/channel
+func ListChannels(c *gin.Context) {
+	info := struct {
+		NetworkID int `form:"networkID" json:"networkID"`
+	}{}
 
-// Note: All channel
-func GetChannelInfo(c *gin.Context) {
-	ret := []model.Channel{}
+	if err := c.ShouldBindQuery(&info); err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
 
-	nets, err := model.QueryAllNetwork()
+	var chs []model.Channel
+	var err error
+	if info.NetworkID != 0 {
+		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
+	} else {
+		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
+	}
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
 			SetMessage(err.Error()).
 			Result(c.JSON)
-	}
-
-	for _, net := range nets {
-		if err := net.RefreshChannels(); err != nil {
-			response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
-				SetMessage(err.Error()).
-				Result(c.JSON)
-		}
-		ret = append(ret, net.Channels...)
+		return
 	}
 
 	response.Ok().
-		SetPayload(response.NewChannels(ret)).
+		SetPayload(respFactory.NewChannels(chs)).
 		Result(c.JSON)
+}
+
+// GET /api/channel/:id
+func GetChannelByID(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	ch, err := dao.FindChannelByID(id)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
+	bcInfoResp, err := service.NewChannelService(ch).GetChannelInfo()
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrBlockchainNetworkError).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+
+	}
+
+	response.Ok().
+		SetPayload(respFactory.NewChannelWithHeight(ch, bcInfoResp.BCI.Height)).
+		Result(c.JSON)
+
 }
