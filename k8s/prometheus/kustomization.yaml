@@ -1,0 +1,9 @@
+resources:
+- prometheus-deploy.yaml
+- prometheus-svc.yaml
+- prometheus-rbac.yaml
+
+configMapGenerator:
+- name: prometheus-config
+  files:
+  - config/prometheus.yaml

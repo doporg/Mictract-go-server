@@ -23,10 +23,11 @@ WIP now.
    ```
    systemctl enable --now nfs-server
    ```
+
 4. configure database:
    1. start your mysql database.
       For example, use [mysql](https://hub.docker.com/_/mysql) on docker:
-      ``` 
+      ```
       docker run --name mic-mysql -e MYSQL_ROOT_PASSWORD=123456 -p 3306:3306 -d mysql:8
       ```
 
@@ -34,9 +35,9 @@ WIP now.
       Edit `k8s/mysql-svc.yaml` and `k apply -f k8s/mysql-svc.yaml`.
 
 5. put your k8s config and `template/configtx.yaml.tpl` and `template/channel.yaml.tpl` and `scripts` on `config.NFS_EXPOSED_PATH`, your `kube-config.yaml` should be like this:
-   
+
    Note: the `certificate-authority-data` and `client-key-data` are base64 encoded.
-   
+
    ```yaml
    apiVersion: v1
    clusters:
@@ -60,7 +61,7 @@ WIP now.
      client-certificate-data: LS0tL...CBDRVJUSUZJQ0FURS0tLS0tCg==
      client-key-data: LS0tL...FJTQSBQUklWQVRFIEtFWS0tLS0tCg==
    ```
-   
+
 6. check your network directory, which should be like this:
    ```text
    mictract
@@ -70,7 +71,34 @@ WIP now.
    └── scripts
    ```
 
-### Development environment [optional] 
+### Prometheus [optional]
+
+We use [Prometheus]() for network monitoring.
+
+1. Add prometheus to your k8s. (If you have one, you should ensure your prometheus can monitor k8s cAdvisor)
+   ```
+   kubectl apply -k k8s/prometheus
+   ```
+
+2. Check if prometheus is running.
+   ```
+   kubectl get pod
+   kubectl get svc
+   ```
+   If it's correct, you can see the `prometheus` pod and service running.
+   ```
+   NAME                                              READY   STATUS             RESTARTS   AGE
+   ...
+   prometheus-7dddd47bcf-7w8td                       1/1     Running            0          2s
+
+
+   NAME                             TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                                      AGE
+   ...
+   prometheus                       NodePort       10.109.131.55    <none>        9090:30500/TCP                               2s
+   ```
+
+
+### Development environment [optional]
 
 1. setup minikube.
    ```shell
