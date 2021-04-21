@@ -73,7 +73,15 @@ func ListBlocks(c *gin.Context)  {
 		blocks = append(blocks, block)
 	}
 
+	ret, err := response.ParseBlocks(blocks)
+	if err != nil {
+		response.Err(http.StatusInternalServerError, enum.CodeErrNotFound).
+			SetMessage(err.Error()).
+			Result(c.JSON)
+		return
+	}
+
 	response.Ok().
-		SetPayload(blocks).
+		SetPayload(ret).
 		Result(c.JSON)
 }
