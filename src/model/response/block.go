@@ -7,7 +7,7 @@ import (
 )
 
 type Block struct {
-	RawBlock			*common.Block	`json:"raw_block"`
+	RawBlock			*common.Block	`json:"rawBlock"`
 	Data                []Recode		`json:"data"`
 }
 
