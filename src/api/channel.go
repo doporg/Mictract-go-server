@@ -70,7 +70,7 @@ func ListChannels(c *gin.Context) {
 	if info.NetworkID != 0 {
 		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
 	} else {
-		chs, err = dao.FindAllChannelsInNetwork(info.NetworkID)
+		chs, err = dao.FindAllChannels()
 	}
 	if err != nil {
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).

@@ -21,6 +21,14 @@ func FindChannelByID(chID int) (*model.Channel, error) {
 	return &chs[0], nil
 }
 
+func FindAllChannels() ([]model.Channel, error) {
+	var chs []model.Channel
+	if err := global.DB.Find(&chs).Error; err != nil {
+		return []model.Channel{}, err
+	}
+	return chs, nil
+}
+
 func UpdateOrgIDs(chID, orgID int) error {
 	// 加个互斥锁
 	global.ChannelLock.Lock()
