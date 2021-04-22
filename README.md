@@ -137,3 +137,28 @@ We use [Prometheus]() for network monitoring.
    ```
    Or, when you need to *run* it, `go run main.go` via ssh terminal directly. 
 
+### EFK [optional]
+1. restart minikube
+   ```shell
+   minikube start --memory 5120 # 5GB
+   minikube addons enable efk
+   ```
+   
+2. Make sure the container is running, then wait ten minutes
+   ```shell
+   kubectl get pods --namespace=kube-system
+   ```
+3. Use Kibana
+   ```shell
+   minikube service kibana-logging --namespace=kube-system
+   ```
+4. Configure log alerts
+   ```shell
+   export ALERT_ENABLE=true
+   export SMTPHost=smtp.example.com
+   export SMTPPort=25
+   export SMTPUsername=username@example.com
+   export SMTPPassword=YourAuthorizationCode
+   export SMTPRecvier=recvier1@example.com;recvier2@example.com
+   ```
+   If the peer, orderer, and ca containers have warn and error level logs, the program will send an email to the mailbox you specify

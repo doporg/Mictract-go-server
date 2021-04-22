@@ -31,4 +31,16 @@ var (
 	NFS_SERVER_URL		= os.Getenv("NFS_SERVER_URL")
 	DB_SERVER_URL		= os.Getenv("DB_SERVER_URL")
 	DB_PW         		= os.Getenv("DB_PW")
+
+	// alert
+	// example: export ALERT_ENABLE = true
+	ALERT_ENABLE		= os.Getenv("ALERT_ENABLE")
+
+	ES_HOSTS			= []string{"http://elasticsearch-logging.kube-system:9200/"}
+	SMTPHost			= os.Getenv("SMTPHost")
+	SMTPPort			= os.Getenv("SMTPPort")
+	SMTPUsername		= os.Getenv("SMTPUsername")
+	SMTPPassword		= os.Getenv("SMTPPassword")
+	// example: export SMTPRecvier=zhangsan@qq.com;lisi@qq.com
+	SMTPRecvier			= os.Getenv("SMTPRecvier")
 )
