@@ -1,0 +1,3 @@
+resources:
+- dev-deploy.yaml
+- dev-svc.yaml

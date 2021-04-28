@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+spec:
+  selector:
+    matchLabels:
+      app: mictract
+  template:
+    metadata:
+      labels:
+        app: mictract
+    spec:
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:latest
+        ports:
+        - name: foo
+          containerPort: 50000
+        - name: main
+          containerPort: 8080
+        volumeMounts:
+        - name: networks
+          mountPath: /mictract
+      volumes:
+      - name: networks
+        nfs:
+          # configure your NFS server, `path` means `NFS_EXPOSED_PATH`
+          path: /var/mictract
+          server: nfs-server
