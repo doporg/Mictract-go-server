@@ -9,6 +9,12 @@ func GetRouter() (router *gin.Engine) {
 	router = gin.Default()
 
 	APIRoute := router.Group("api")
+	APIRoute.Use(api.AuthMiddleWare)
+
+	LoginRoute	:= APIRoute.Group("login")
+	{
+		LoginRoute.POST("/", api.Login)
+	}
 
 	NetworkRouter := APIRoute.Group("network")
 	{

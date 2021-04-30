@@ -30,6 +30,14 @@ func InvokeChaincode(c *gin.Context)  {
 			Result(c.JSON)
 		return
 	}
+	userIDInt, ok := c.Get("userID")
+	if !ok {
+		response.Err(http.StatusBadRequest, enum.CodeErrMissingArgument).
+			SetMessage("cookies error").
+			Result(c.JSON)
+		return
+	}
+	userID := userIDInt.(int)
 
 	if info.InvokeType != "init" &&
 		info.InvokeType != "query" &&
@@ -41,7 +49,7 @@ func InvokeChaincode(c *gin.Context)  {
 	}
 
 	tx, err := factory.NewTransationFactory().
-		NewTransation(info.UserID, info.ChaincodeID, info.PeerURLs, info.Args, info.InvokeType)
+		NewTransation(userID, info.ChaincodeID, info.PeerURLs, info.Args, info.InvokeType)
 	if err != nil {
 		global.Logger.Error("fail to get new tx", zap.Error(err))
 		response.Err(http.StatusInternalServerError, enum.CodeErrDB).
@@ -83,7 +91,7 @@ func InvokeChaincode(c *gin.Context)  {
 		}
 
 		global.Logger.Info("Obtaining channel client...")
-		user, err := dao.FindCaUserByID(info.UserID)
+		user, err := dao.FindCaUserByID(userID)
 		if err != nil {
 			dao.UpdateTransactionStatusAndMessageByID(
 				tx.ID,
