@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"math/rand"
 	"mictract/config"
@@ -46,6 +47,12 @@ func Login(c *gin.Context)  {
 		if err != nil {
 			response.Err(http.StatusBadRequest, enum.CodeErrDB).
 				SetMessage(err.Error()).
+				Result(c.JSON)
+			return
+		}
+		if user.Password != reqInfo.Password {
+			response.Err(http.StatusBadRequest, enum.CodeErrBadArgument).
+				SetMessage("wrong user name or password").
 				Result(c.JSON)
 			return
 		}
@@ -151,8 +158,12 @@ func AuthMiddleWare (c *gin.Context) {
 	}
 
 	if sessionID != compute_session_id(userID, password, randomNumber, expireTime) {
+		fmt.Println(userID)
+		fmt.Println(password)
+		fmt.Println(randomNumber)
+		fmt.Println(expireTime)
 		response.Err(http.StatusBadRequest, enum.CodeErrNotFound).
-			SetMessage("Authentication failed").
+			SetMessage("Authentication_failed").
 			Result(c.JSON)
 		c.Abort()
 		return

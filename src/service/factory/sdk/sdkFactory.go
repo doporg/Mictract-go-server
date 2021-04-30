@@ -65,6 +65,22 @@ func (sdkf *SDKFactory)NewCompleteSDKByNetworkID(netID int) (*fabsdk.FabricSDK, 
 	return sdk, nil
 }
 
+func (sdkf *SDKFactory)NewSDKConfigByUserID(userID int) *model.SDKConfig {
+	user, _ 	:= dao.FindCaUserByID(userID)
+	configObj 	:= sdkf.newSDKConfigByOrganizationID(user.OrganizationID)
+
+	users := configObj.Organizations[model.GetOrganizationNameByIDAndBool(user.OrganizationID, user.IsInOrdererOrg())].Users
+	for k, _ := range users {
+		if k != user.GetName() {
+			delete(users, k)
+		}
+	}
+
+	configObj.CertificateAuthorities = nil
+
+	return configObj
+}
+
 func (sdkf *SDKFactory)newSDKConfigByNetworkID(netID int) *model.SDKConfig {
 	netPeers, _			:= dao.FindAllPeersInNetwork(netID)
 	orgs, _ 			:= dao.FindAllOrganizationsInNetwork(netID)

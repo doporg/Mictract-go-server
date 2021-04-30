@@ -16,6 +16,11 @@ func GetRouter() (router *gin.Engine) {
 		LoginRoute.POST("/", api.Login)
 	}
 
+	SDKRouter := APIRoute.Group("sdk")
+	{
+		SDKRouter.GET("/", api.GetSDKByUserID)
+	}
+
 	NetworkRouter := APIRoute.Group("network")
 	{
 		NetworkRouter.POST("/", api.CreateNetwork)
