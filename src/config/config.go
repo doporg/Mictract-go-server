@@ -27,6 +27,10 @@ var (
 
 	SDK_LEVEL			= "info"
 
+	// Do not modify the super user id
+	Super_User_ID		= -1
+	Super_User_PW		= "root"
+
 	// export A_B_C = D_E_F
 	NFS_SERVER_URL		= os.Getenv("NFS_SERVER_URL")
 	DB_SERVER_URL		= os.Getenv("DB_SERVER_URL")
